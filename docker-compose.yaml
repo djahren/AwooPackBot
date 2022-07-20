@@ -1,0 +1,6 @@
+version: '3'
+services:
+  awoo:
+    container_name: awoo-pack-bot
+    restart: always
+    build: .
