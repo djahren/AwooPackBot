@@ -15,6 +15,7 @@ sheet_id = "1IfGrcY4ntE70fycFRAEtjAvb20ukVf9wTkPzdvtLLKg"
 formats_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet=Formats"
 words_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet=Words"
 pacific_tz = ZoneInfo("America/Los_Angeles")
+chats_file_path = "data/chats.txt"
 formats = ()
 words = {}
 chats = []
@@ -58,9 +59,21 @@ def generate_message():
     return the_message.replace('%tod%', tod) #return message and replace %tod% if it exists
 
 def register_jobs(context: ContextTypes.DEFAULT_TYPE, chat_id):
-    m = context.job_queue.run_repeating(send_reminder_job, interval=timedelta(days=1), first=time(hour=8, tzinfo=pacific_tz),chat_id=chat_id, name='morning')
-    a = context.job_queue.run_repeating(send_reminder_job, interval=timedelta(days=1), first=time(hour=13, tzinfo=pacific_tz),chat_id=chat_id, name='afternoon')
+    m = context.job_queue.run_repeating(send_reminder_job, interval=timedelta(days=1), first=time(hour=8, tzinfo=pacific_tz),chat_id=chat_id, name=f"morning{chat_id}")
+    a = context.job_queue.run_repeating(send_reminder_job, interval=timedelta(days=1), first=time(hour=13, tzinfo=pacific_tz),chat_id=chat_id, name=f"afternoon{chat_id}")
     return m and a
+
+def unregister_jobs(context: ContextTypes.DEFAULT_TYPE, chat_id):
+    removed_jobs = False
+    for job_name in (f"morning{chat_id}",f"afternoon{chat_id}"):
+        current_jobs = context.job_queue.get_jobs_by_name(job_name)
+        for job in current_jobs:
+            job.schedule_removal()
+            logging.info(f"Removing job: {job_name}")
+            removed_jobs = True
+    if removed_jobs:
+        remove_chat(chat_id=chat_id)
+    return removed_jobs
 
 def save_chat(chat: Chat):
     #add the chat id to the current chats list if it doesn't exist 
@@ -71,16 +84,27 @@ def save_chat(chat: Chat):
             else: 
                 title = f"{chat.first_name} {chat.last_name}"
             chats.append(chat.id)
-            with open("data/chats.txt", "a") as chat_file:
+            with open(chats_file_path, "a") as chat_file:
                 chat_file.write(f"{chat.id},{title}\n")
 
-def load_chats():
-    with open("data/chats.txt", "r") as chat_file:
+def remove_chat(chat_id):
+    updated_chats = []
+    chats.remove(chat_id)
+    with open(chats_file_path, "r") as chat_file:
+        updated_chats = [c for c in chat_file.readlines() if not str(c).startswith(str(chat_id))]
+    with open(chats_file_path, "w") as chat_file:
+        chat_file.writelines(updated_chats)
+
+def load_chats(application):
+    with open(chats_file_path, "r") as chat_file:
         loaded_chats = [l[:-1] for l in chat_file.readlines()]
-        print("Loading chats: ")
+        logging.info("Loading chats: ")
         for c in loaded_chats:
-            print(c)
-            chats.append(int(c.split(",")[0]))
+            logging.info(c)
+            chat_id = int(c.split(",")[0])
+            context = ContextTypes.DEFAULT_TYPE(application=application, chat_id=chat_id)
+            chats.append(chat_id)
+            register_jobs(context=context, chat_id=chat_id)
 
 def get_current_time_string():
     return datetime.now(pacific_tz).strftime("%H:%M:%S")
@@ -101,7 +125,7 @@ async def update_data_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     await context.bot.send_message(chat_id=update.effective_chat.id, text="I've updated the my database from the Google Sheet.")
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_message(chat_id=update.effective_chat.id, text="Available commands:\n/getmessage: gets a random message.\n/help: shows this message.\n/start: registers recurring messages.\n/update: updates the bot's data from the database.")
+    await context.bot.send_message(chat_id=update.effective_chat.id, text="Available commands:\n/getmessage: gets a random message.\n/help: shows this message.\n/start: registers recurring messages.\n/stop: removes scheduled reminders for this chat.\n/update: updates the bot's data from the database.")
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_message.chat_id
@@ -112,12 +136,18 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await context.bot.send_message(chat_id=chat_id, text="I had trouble scheduling the default jobs. 🥺 I'm sorry, please check the logs for more info.")
 
+async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_message.chat_id
+    jobs_stopped = unregister_jobs(context=context, chat_id=chat_id)
+    if jobs_stopped: await context.bot.send_message(chat_id=chat_id, text="I've removed the scheduled reminders from this chat.")
+    else: await context.bot.send_message(chat_id=chat_id, text="I'm not seeing any scheduled reminders for this chat.")
+
 async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=update.effective_chat.id, text="Sorry, I didn't understand that command.")
 
 if __name__ == '__main__':
     update_data_from_google()
-    load_chats()
+    
     #open token.txt
     token = ""
     with open("token.txt", "r") as tkfile:
@@ -126,8 +156,9 @@ if __name__ == '__main__':
         sys.exit("Create a file called token.txt and add your bot token to it.")
     
     application = ApplicationBuilder().token(token).build()
-
+    load_chats(application)
     application.add_handler(CommandHandler('start', start_command))
+    application.add_handler(CommandHandler('stop', stop_command))
     application.add_handler(CommandHandler('getmessage', send_message_command))
     application.add_handler(CommandHandler('help', help_command))
     application.add_handler(CommandHandler('update', update_data_command))
