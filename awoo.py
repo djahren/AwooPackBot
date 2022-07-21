@@ -2,7 +2,7 @@ import logging, re
 from random import choice
 import sys
 from zoneinfo import ZoneInfo
-from telegram import Update
+from telegram import Update,Chat
 from telegram.ext import filters, MessageHandler, ApplicationBuilder, CommandHandler, ContextTypes
 from datetime import time,timedelta,datetime
 import pandas as pd
@@ -59,19 +59,31 @@ def generate_message():
 
 def register_jobs(context: ContextTypes.DEFAULT_TYPE, chat_id):
     tzi = ZoneInfo("America/Los_Angeles")
-    m = context.job_queue.run_repeating(send_reminder, interval=timedelta(days=1), first=time(hour=8, tzinfo=tzi),chat_id=chat_id, name='morning')
-    a = context.job_queue.run_repeating(send_reminder, interval=timedelta(days=1), first=time(hour=13, tzinfo=tzi),chat_id=chat_id, name='afternoon')
-    #when registering new jobs, add the chat id to the current chats list if it doesn't exist 
-    #append the file if the chat id doesn't currently exist in the file with the format <chatid>,<chatname>
+    m = context.job_queue.run_repeating(send_reminder_job, interval=timedelta(days=1), first=time(hour=8, tzinfo=tzi),chat_id=chat_id, name='morning')
+    a = context.job_queue.run_repeating(send_reminder_job, interval=timedelta(days=1), first=time(hour=13, tzinfo=tzi),chat_id=chat_id, name='afternoon')
     return m and a
 
-def load_chats():
-    #open saved chats.txt file
-    #import saved chats to a list
-    #when the bot loads, re-register jobs from saved chats file
-    pass
+def save_chat(chat: Chat):
+    #add the chat id to the current chats list if it doesn't exist 
+    #append the file if the chat id doesn't currently exist in the file with the format <chatid>,<chatname>
+    if not chat.id in chats:
+            if chat.title:
+                title = chat.title
+            else: 
+                title = f"{chat.first_name} {chat.last_name}"
+            chats.append(chat.id)
+            with open("chats.txt", "a") as chat_file:
+                chat_file.write(f"{chat.id},{title}\n")
 
-async def send_reminder(context: ContextTypes.DEFAULT_TYPE) -> None: #called by scheduled job
+def load_chats():
+    with open("chats.txt", "r") as chat_file:
+        loaded_chats = [l[:-1] for l in chat_file.readlines()]
+        print("Loading chats: ")
+        for c in loaded_chats:
+            print(c)
+            chats.append(int(c.split(",")[0]))
+
+async def send_reminder_job(context: ContextTypes.DEFAULT_TYPE) -> None: #called by scheduled job
     job = context.job
     message = generate_message()
     logging.info(f"Sending message via job: {message}")
@@ -93,6 +105,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_message.chat_id
     jobs_scheduled = register_jobs(context=context, chat_id=chat_id)
     if jobs_scheduled: 
+        save_chat(update.effective_message.chat)
         await context.bot.send_message(chat_id=chat_id, text="Awo0o0o! I've registered morning and afternoon repeating reminders for you.\nUse /help to see a list of commands I respond to.")
     else:
         await context.bot.send_message(chat_id=chat_id, text="I had trouble scheduling the default jobs. 🥺 I'm sorry, please check the logs for more info.")
@@ -102,7 +115,7 @@ async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 if __name__ == '__main__':
     update_data_from_google()
-
+    load_chats()
     #open token.txt
     token = ""
     with open("token.txt", "r") as tkfile:
