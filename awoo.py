@@ -1,6 +1,5 @@
-import logging, re
+import logging, re, sys
 from random import choice
-import sys
 from zoneinfo import ZoneInfo
 from telegram import Update,Chat
 from telegram.ext import filters, MessageHandler, ApplicationBuilder, CommandHandler, ContextTypes
@@ -15,6 +14,7 @@ logging.basicConfig(
 sheet_id = "1IfGrcY4ntE70fycFRAEtjAvb20ukVf9wTkPzdvtLLKg"
 formats_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet=Formats"
 words_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet=Words"
+pacific_tz = ZoneInfo("America/Los_Angeles")
 formats = ()
 words = {}
 chats = []
@@ -39,28 +39,27 @@ def update_data_from_google():
 
 def generate_message():
     the_message = str(choice(formats)) #pick a format
-    now = datetime.now()
-    tod = "morning" 
-    if now.hour >= 12: tod = "afternoon"
-    if now.hour >= 18: tod = "evening"
+    now = datetime.now(pacific_tz)
+    if now.hour < 12:   tod = "morning" 
+    elif now.hour < 18: tod = "afternoon"
+    else:               tod = "evening"
 
     vars_to_replace = re.findall(r'\%[a-z_]+\%',the_message) #get all variables
     for index, current_var in enumerate(vars_to_replace): #loop through and replace each one
         key = str(current_var).replace('%','')
-        if key == 'reminder':
+        if key == 'reminder': #set the reminder to the first reminder if it's morning, else pick at random
             selected_word = words[key][0] if tod == 'morning' else str(choice(words[key][1:])).strip()
         else:
             selected_word = str(choice(words[key])).strip() #select random word for each variable
         if key == 'greeting' and index != 0: 
             selected_word = selected_word.lower()
-        the_message = the_message.replace(current_var, selected_word)
+        the_message = the_message.replace(current_var, selected_word, 1)
 
     return the_message.replace('%tod%', tod) #return message and replace %tod% if it exists
 
 def register_jobs(context: ContextTypes.DEFAULT_TYPE, chat_id):
-    tzi = ZoneInfo("America/Los_Angeles")
-    m = context.job_queue.run_repeating(send_reminder_job, interval=timedelta(days=1), first=time(hour=8, tzinfo=tzi),chat_id=chat_id, name='morning')
-    a = context.job_queue.run_repeating(send_reminder_job, interval=timedelta(days=1), first=time(hour=13, tzinfo=tzi),chat_id=chat_id, name='afternoon')
+    m = context.job_queue.run_repeating(send_reminder_job, interval=timedelta(days=1), first=time(hour=8, tzinfo=pacific_tz),chat_id=chat_id, name='morning')
+    a = context.job_queue.run_repeating(send_reminder_job, interval=timedelta(days=1), first=time(hour=13, tzinfo=pacific_tz),chat_id=chat_id, name='afternoon')
     return m and a
 
 def save_chat(chat: Chat):
@@ -83,15 +82,18 @@ def load_chats():
             print(c)
             chats.append(int(c.split(",")[0]))
 
+def get_current_time_string():
+    return datetime.now(pacific_tz).strftime("%H:%M:%S")
+
 async def send_reminder_job(context: ContextTypes.DEFAULT_TYPE) -> None: #called by scheduled job
     job = context.job
     message = generate_message()
-    logging.info(f"Sending message via job: {message}")
+    logging.info(f"Sending message via job: {message} at {get_current_time_string()}")
     await context.bot.send_message(chat_id=job.chat_id, text=message)  
 
 async def send_message_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = generate_message()
-    logging.info(f"Sending message: {message}")
+    logging.info(f"Sending message: {message} at {get_current_time_string()}")
     await context.bot.send_message(chat_id=update.effective_chat.id, text=message)
 
 async def update_data_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
