@@ -4,3 +4,5 @@ services:
     container_name: awoo-pack-bot
     restart: always
     build: .
+    volumes:
+      - "./data:/usr/src/bot/data"

@@ -72,11 +72,11 @@ def save_chat(chat: Chat):
             else: 
                 title = f"{chat.first_name} {chat.last_name}"
             chats.append(chat.id)
-            with open("chats.txt", "a") as chat_file:
+            with open("data/chats.txt", "a") as chat_file:
                 chat_file.write(f"{chat.id},{title}\n")
 
 def load_chats():
-    with open("chats.txt", "r") as chat_file:
+    with open("data/chats.txt", "r") as chat_file:
         loaded_chats = [l[:-1] for l in chat_file.readlines()]
         print("Loading chats: ")
         for c in loaded_chats:
