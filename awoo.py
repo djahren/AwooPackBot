@@ -1,4 +1,4 @@
-import logging, re, sys
+import logging, re, sys, json
 from random import choice
 from zoneinfo import ZoneInfo
 from telegram import Update,Chat
@@ -15,10 +15,10 @@ sheet_id = "1IfGrcY4ntE70fycFRAEtjAvb20ukVf9wTkPzdvtLLKg"
 formats_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet=Formats"
 words_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet=Words"
 pacific_tz = ZoneInfo("America/Los_Angeles")
-chats_file_path = "data/chats.txt"
+chats_file_path = "data/chats.json"
 formats = ()
 words = {}
-chats = []
+chats = {}
 
 def update_data_from_google():
     global formats
@@ -79,32 +79,40 @@ def save_chat(chat: Chat):
     #add the chat id to the current chats list if it doesn't exist 
     #append the file if the chat id doesn't currently exist in the file with the format <chatid>,<chatname>
     if not chat.id in chats:
-            if chat.title:
-                title = chat.title
-            else: 
-                title = f"{chat.first_name} {chat.last_name}"
-            chats.append(chat.id)
-            with open(chats_file_path, "a") as chat_file:
-                chat_file.write(f"{chat.id},{title}\n")
+        title = chat.title if chat.title else f"{chat.first_name} {chat.last_name}"
+        chats[chat.id] = {"title": title}
+        save_file()
+
+def save_file():
+    with open(chats_file_path, "w") as chat_file:
+        chat_file.write(json.dumps(chats, indent=4))
+
+def load_file():
+    global chats
+    try:
+        with open(chats_file_path, "r") as chat_file:
+            chats = json.load(chat_file)
+    except FileNotFoundError:
+        chats = {}
+    new_chats = {}
+    for chat_id in chats: #convert all chat_id dictionary keys saved as strings to numbers.
+        if isinstance(chat_id, str) and chat_id.lstrip('-').isnumeric():
+            new_chats[int(chat_id)] = chats[chat_id]
+        else:
+            new_chats[chat_id] = chats[chat_id]
+    chats = new_chats.copy()
+    print(chats)
 
 def remove_chat(chat_id):
-    updated_chats = []
-    chats.remove(chat_id)
-    with open(chats_file_path, "r") as chat_file:
-        updated_chats = [c for c in chat_file.readlines() if not str(c).startswith(str(chat_id))]
-    with open(chats_file_path, "w") as chat_file:
-        chat_file.writelines(updated_chats)
+    chats.pop(chat_id)
+    save_file()
 
 def load_chats(application):
-    with open(chats_file_path, "r") as chat_file:
-        loaded_chats = [l[:-1] for l in chat_file.readlines()]
-        logging.info("Loading chats: ")
-        for c in loaded_chats:
-            logging.info(c)
-            chat_id = int(c.split(",")[0])
-            context = ContextTypes.DEFAULT_TYPE(application=application, chat_id=chat_id)
-            chats.append(chat_id)
-            register_jobs(context=context, chat_id=chat_id)
+    load_file()
+    for chat_id in chats:
+        logging.info(chat_id)
+        context = ContextTypes.DEFAULT_TYPE(application=application, chat_id=chat_id)
+        register_jobs(context=context, chat_id=chat_id)
 
 def get_current_time_string():
     return datetime.now(pacific_tz).strftime("%H:%M:%S")
