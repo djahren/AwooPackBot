@@ -1,0 +1,11 @@
+/start
+/stop
+/help
+/blork
+/update
+/getmessage
+/setdailyreminder 4:20
+/listdailyreminders 
+/stopdailyreminder 4:20
+/setdailyreminder 1
+/setdailyreminder t
