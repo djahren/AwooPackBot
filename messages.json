@@ -1,0 +1,14 @@
+{
+    "cmd_help": "Available commands:\n/getmessage: gets a random message.\n/help: shows this message.\n/start: registers recurring messages.\n/stop: removes scheduled reminders for this chat.\n/update: updates the bot's data from the database.",
+    "cmd_start":"Awo0o0o! Harro, welcome to AwooPackBot, I've registered this chat in my database.\nUse /help to see a list of commands I respond to.",
+    "cmd_set_daily_succcess": "I've registered a daily reminder for the time you requested. Use /listdailyreminders to see what reminders are scheduled for this chat.",
+    "cmd_stop_daily_success": "I've removed the requested daily reminder.",
+    "cmd_stop": "I've removed the scheduled reminders from this chat.",
+    "cmd_update": "I've updated the my database from the Google Sheet.",
+    "cmd_unknown": "Sorry, I don't know that trick.🥺🦴",
+    "err_24h_format": "This command requires a time specified in 24 hour format.",
+    "err_already_exists":"A reminder for that time is already set for this chat.",
+    "err_cant_find_reminder": "I couldn't find a reminder for this chat at that time.",
+    "err_cant_schedule_jobs": "I had trouble scheduling that reminder. 🥺 I'm sorry, please check the logs for more info.",
+    "err_no_reminders": "I'm not seeing any scheduled reminders for this chat."
+}
