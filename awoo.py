@@ -1,12 +1,10 @@
-from glob import glob
 import logging, re, sys
 from constants import *
 from functions import *
 from telegram import Update,Chat
 from telegram.ext import filters, MessageHandler, ApplicationBuilder, CommandHandler, ContextTypes
-from datetime import datetime,time,timedelta
+from datetime import time,timedelta
 from random import choice
-
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -20,12 +18,10 @@ msg = get_system_messages()
 def register_daily_reminder(context: ContextTypes.DEFAULT_TYPE, chat_id, hours, minutes = 0):
     first_occurance = time(hour=hours, minute=minutes, tzinfo=PACIFIC_TZ)
     job_name = get_job_name(chat_id, hours, minutes)
-    return context.job_queue.run_repeating(send_reminder_job, interval=timedelta(days=1), first=first_occurance, chat_id=chat_id, name=job_name)
-    
+    return context.job_queue.run_repeating(send_reminder_job, interval=timedelta(days=1), 
+        first=first_occurance, chat_id=chat_id, name=job_name)
 
 def add_chat_if_not_exist(chat: Chat):
-    #add the chat id to the current chats list if it doesn't exist 
-    #append the file if the chat id doesn't currently exist in the file with the format <chatid>,<chatname>
     if not chat.id in chats:
         title = chat.title if chat.title else f"{chat.first_name} {chat.last_name}"
         chats[chat.id] = {
@@ -47,11 +43,13 @@ def load_chats(application):
         logging.info(chat_id)
         context = ContextTypes.DEFAULT_TYPE(application=application, chat_id=chat_id)
         for daily_id in chats[chat_id]["daily_reminders"]:
-            register_daily_reminder(context=context, chat_id=chat_id, hours=int(daily_id.split("_")[1]), minutes=int(daily_id.split("_")[2]))
+            register_daily_reminder(context=context, chat_id=chat_id, 
+                hours=int(daily_id.split("_")[1]), minutes=int(daily_id.split("_")[2]))
 
 async def awoo_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.is_bot: return
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=choice(msg["awoo"]), reply_to_message_id=update.message.id) 
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=choice(msg["awoo"]), 
+        reply_to_message_id=update.message.id) 
 
 async def send_reminder_job(context: ContextTypes.DEFAULT_TYPE) -> None: #called by scheduled job
     job = context.job
@@ -150,13 +148,6 @@ async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=update.effective_chat.id, text=msg["cmd_unknown"])
 
-async def parse_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.is_bot: return
-    message = update.message.text
-    print(message)
-    if re.search(AWOO_PATTERN, message, flags=re.IGNORECASE):
-        awoo_reply(update=update, context=context)
-
 if __name__ == '__main__':
     data = get_data_from_google()
     #open token.txt
@@ -168,8 +159,8 @@ if __name__ == '__main__':
     
     application = ApplicationBuilder().token(token).build()
     load_chats(application)
-    # application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), parse_all_messages))
-    application.add_handler(MessageHandler(filters.Regex(re.compile(r"\b[au]+w[u0o]+\b", re.IGNORECASE)), awoo_reply))
+    application.add_handler(MessageHandler(filters.Regex(re.compile(r"\b[au]+w[u0o]+\b", 
+        re.IGNORECASE)), awoo_reply))
     application.add_handler(CommandHandler('awoo', awoo_reply))
     application.add_handler(CommandHandler('help', help_command))
     application.add_handler(CommandHandler('getmessage', send_message_command))
