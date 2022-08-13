@@ -5,7 +5,7 @@ from random import choice
 from datetime import datetime
 import pandas as pd
 
-def get_data_from_google():
+def get_data_from_google() -> dict:
     formats_url = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Formats"
     words_url = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Words"
     formats_pd = pd.read_csv(formats_url).to_dict()
@@ -26,7 +26,7 @@ def get_data_from_google():
         data["words"][key] = new_words
     return data
 
-def generate_message(data):
+def generate_message(data: dict):
     words = data["words"]
     formats = data["formats"]
     the_message = str(choice(formats)) #pick a format
@@ -48,26 +48,26 @@ def generate_message(data):
 
     return the_message.replace('%tod%', tod) #return message and replace %tod% if it exists
 
-def get_job_name(chat_id, hours, minutes):
+def get_job_name(chat_id: int, hours: int, minutes: int) -> str:
     return f"{chat_id}_{hours}_{minutes}"
 
-def get_current_time_string():
+def get_current_time_string() -> str:
     return datetime.now(PACIFIC_TZ).strftime("%H:%M:%S")
 
-def match_time_string(time_string) -> dict:
+def match_time_string(time_string) -> tuple:
     matches = re.match(r'([0-2]?\d):??([0-5]\d)', time_string)
     if matches: return (int(matches[1]), int(matches[2]))
-    else: return {}
+    else: return ()
 
-def get_system_messages():
+def get_system_messages() -> dict:
     with open(MESSAGES_FILE_PATH, "r") as msg_file:
         return json.load(msg_file)
 
-def save_chats_to_file(chats):
+def save_chats_to_file(chats: dict):
     with open(CHATS_FILE_PATH, "w") as chat_file:
         chat_file.write(json.dumps(chats, indent=4))
 
-def get_chats_from_file():
+def get_chats_from_file() -> dict:
     try:
         with open(CHATS_FILE_PATH, "r") as chat_file:
             chats = json.load(chat_file)
