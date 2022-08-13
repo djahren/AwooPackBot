@@ -22,6 +22,7 @@ for command in commands:
 one_min = datetime.now() + timedelta(minutes=1)
 typewrite(f"/setdailyreminder {one_min.hour}:{one_min.minute:02d}")
 press("enter")
+print("Keep your cursor in the chatbox.")
 for i in range(60 - one_min.second + 5,0,-1):
     print(i)
     sleep(1)
