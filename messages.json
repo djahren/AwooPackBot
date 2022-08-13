@@ -7,19 +7,21 @@
         "UwU",
         "*mournful howl*",
         "Awoo! ^.^",
-        "Awoo?",
-        "૮ ᴖﻌᴖა"
+        "Awoo?"
     ],
     "cmd_help": "Available commands:/getmessage: gets a random message.\n/help: shows this message.\n/start: registers the chat with the bot.\n/listdailyreminders lists all current reminders for the chat.\n/setdailyreminder 12:34 registers a daily reminder at the 24h time specified.\n/stopdailyreminder 12:34 removes a daily reminder at the 24h time specified.\n/stop: removes all scheduled reminders for this chat and unregisters this chat.\n/update: updates the bot's data from the database.",
     "cmd_start":"Awo0o0o! Harro, welcome to AwooPackBot, I've registered this chat in my database.\nUse /help to see a list of commands I respond to.",
     "cmd_set_daily_succcess": "I've registered a daily reminder for the time you requested. Use /listdailyreminders to see what reminders are scheduled for this chat.",
     "cmd_stop_daily_success": "I've removed the requested daily reminder.",
-    "cmd_stop": "I've removed the scheduled reminders from this chat.",
-    "cmd_update": "I've updated the my database from the Google Sheet.",
+    "cmd_stop": "Are you sure you want to continue? This will remove all scheduled reminders and remove this chat from my database. Use /stopconfirm to continue.",
+    "cmd_stop_confirm": "I've removed this chat along with all scheduled reminders from my database.",
     "cmd_unknown": "Sorry, I don't know that trick.🥺🦴",
+    "cmd_update": "I've updated the my database from the Google Sheet.",
     "err_24h_format": "This command requires a time specified in 24 hour format.",
     "err_already_exists":"A reminder for that time is already set for this chat.",
     "err_cant_find_reminder": "I couldn't find a reminder for this chat at that time.",
     "err_cant_schedule_jobs": "I had trouble scheduling that reminder. 🥺 I'm sorry, please check the logs for more info.",
-    "err_no_reminders": "I'm not seeing any scheduled reminders for this chat."
+    "err_chat_not_in_db": "I don't currently have this chat registered in my database.",
+    "err_no_reminders": "I'm not seeing any scheduled reminders for this chat.",
+    "err_stop_not_armed": "I can't perform this action until you run /stop first."
 }
