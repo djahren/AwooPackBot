@@ -21,6 +21,12 @@ def register_daily_reminder(context: ContextTypes.DEFAULT_TYPE, chat_id, hours, 
     return context.job_queue.run_repeating(send_reminder_job, interval=timedelta(days=1), 
         first=first_occurance, chat_id=chat_id, name=job_name)
 
+def remove_scheduled_job(context: ContextTypes.DEFAULT_TYPE, job_name: str):
+    current_jobs = context.job_queue.get_jobs_by_name(job_name)
+    for job in current_jobs:
+        job.schedule_removal()
+        logging.info(f"Removing job: {job_name}")
+
 def add_chat_if_not_exist(chat: Chat):
     if not chat.id in chats:
         title = chat.title if chat.title else f"{chat.first_name} {chat.last_name}"
@@ -28,11 +34,12 @@ def add_chat_if_not_exist(chat: Chat):
             "title": title,
             "daily_reminders": [],
             "onetime_reminders": [],
-            "time_zone": "America/Los_Angeles"
+            "time_zone": "America/Los_Angeles",
+            "arm_stop": 0
         }
         save_chats_to_file(chats)
 
-def remove_chat(chat_id):
+def remove_chat(chat_id: int):
     chats.pop(chat_id)
     save_chats_to_file(chats)
 
@@ -132,18 +139,24 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=chat_id, text=msg["cmd_start"])
 
 async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global chats
+    #TODO: Add arm_stop boolean per chat
     chat_id = update.effective_message.chat_id
-    removed_jobs = False
-    for job_name in (get_job_name(chat_id, 8, 0),get_job_name(chat_id, 13, 0)):
-        current_jobs = context.job_queue.get_jobs_by_name(job_name)
-        for job in current_jobs:
-            job.schedule_removal()
-            logging.info(f"Removing job: {job_name}")
-            removed_jobs = True
-    if removed_jobs:
-        remove_chat(chat_id=chat_id)
+    if chat_id in chats: 
+        chats[chat_id]["arm_stop"] = 1
         await context.bot.send_message(chat_id=chat_id, text=msg["cmd_stop"])
-    else: await context.bot.send_message(chat_id=chat_id, text=msg["err_no_reminders"])
+    else:
+        await context.bot.send_message(chat_id=chat_id, text=msg["err_chat_not_in_db"])
+
+async def stop_confirm_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_message.chat_id
+    if chat_id in chats: 
+        for job_name in chats[chat_id]["daily_reminders"]:
+            remove_scheduled_job(context=context, job_name=job_name)
+        remove_chat(chat_id=chat_id)
+        await context.bot.send_message(chat_id=chat_id, text=msg["cmd_stop_confirm"])
+    else:
+        await context.bot.send_message(chat_id=chat_id, text=msg["err_chat_not_in_db"])
 
 async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=update.effective_chat.id, text=msg["cmd_unknown"])
@@ -159,7 +172,7 @@ if __name__ == '__main__':
     
     application = ApplicationBuilder().token(token).build()
     load_chats(application)
-    application.add_handler(MessageHandler(filters.Regex(re.compile(r"\b[au]+w[u0o]+\b", 
+    application.add_handler(MessageHandler(filters.Regex(re.compile(AWOO_PATTERN, 
         re.IGNORECASE)), awoo_reply))
     application.add_handler(CommandHandler('awoo', awoo_reply))
     application.add_handler(CommandHandler('help', help_command))
@@ -169,6 +182,7 @@ if __name__ == '__main__':
     application.add_handler(CommandHandler('stopdailyreminder', stop_daily_reminder_command))
     application.add_handler(CommandHandler('start', start_command))
     application.add_handler(CommandHandler('stop', stop_command))
+    application.add_handler(CommandHandler('stopconfirm', stop_confirm_command))
     application.add_handler(CommandHandler('update', update_data_command))
     application.add_handler(MessageHandler(filters.COMMAND, unknown_command))
 
