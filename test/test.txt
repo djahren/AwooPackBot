@@ -1,11 +1,20 @@
 /start
-/stop
+/stopconfirm
 /help
 /blork
+awoo
+Awoo!
 /update
 /getmessage
 /setdailyreminder 4:20
+/setdailyreminder 4:20
 /listdailyreminders 
 /stopdailyreminder 4:20
+/stopdailyreminder 5:20
+/listdailyreminders
+/setdailyreminder 29:59
 /setdailyreminder 1
 /setdailyreminder t
+/stop
+/stopconfirm
+/stop
