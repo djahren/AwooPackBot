@@ -35,9 +35,16 @@ def add_chat_if_not_exist(chat: Chat):
             "daily_reminders": [],
             "onetime_reminders": [],
             "time_zone": "America/Los_Angeles",
-            "arm_stop": 0
+            "stop_armed": 0
         }
         save_chats_to_file(chats)
+
+def set_stop_armed(chat_id, armed):
+    global chats
+    if chat_id in chats: 
+        chats[chat_id]["stop_armed"] = 1 if armed else 0
+        return True
+    else: return False
 
 def remove_chat(chat_id: int):
     chats.pop(chat_id)
@@ -139,11 +146,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=chat_id, text=msg["cmd_start"])
 
 async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global chats
-    #TODO: Add arm_stop boolean per chat
     chat_id = update.effective_message.chat_id
     if chat_id in chats: 
-        chats[chat_id]["arm_stop"] = 1
+        set_stop_armed(chat_id=chat_id,armed=True)
         await context.bot.send_message(chat_id=chat_id, text=msg["cmd_stop"])
     else:
         await context.bot.send_message(chat_id=chat_id, text=msg["err_chat_not_in_db"])
@@ -151,15 +156,23 @@ async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def stop_confirm_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_message.chat_id
     if chat_id in chats: 
-        for job_name in chats[chat_id]["daily_reminders"]:
-            remove_scheduled_job(context=context, job_name=job_name)
-        remove_chat(chat_id=chat_id)
-        await context.bot.send_message(chat_id=chat_id, text=msg["cmd_stop_confirm"])
+        if chats[chat_id]["stop_armed"] == 1:
+            for job_name in chats[chat_id]["daily_reminders"]:
+                remove_scheduled_job(context=context, job_name=job_name)
+            remove_chat(chat_id=chat_id)
+            await context.bot.send_message(chat_id=chat_id, text=msg["cmd_stop_confirm"])
+        else: 
+            await context.bot.send_message(chat_id=chat_id, text=msg["err_stop_not_armed"])
     else:
         await context.bot.send_message(chat_id=chat_id, text=msg["err_chat_not_in_db"])
 
 async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=update.effective_chat.id, text=msg["cmd_unknown"])
+
+async def parse_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    set_stop_armed(chat_id=update.effective_message.chat_id, armed=False)
+    message = update.message.text
+    if update.effective_user.is_bot: return
 
 if __name__ == '__main__':
     data = get_data_from_google()
@@ -172,8 +185,6 @@ if __name__ == '__main__':
     
     application = ApplicationBuilder().token(token).build()
     load_chats(application)
-    application.add_handler(MessageHandler(filters.Regex(re.compile(AWOO_PATTERN, 
-        re.IGNORECASE)), awoo_reply))
     application.add_handler(CommandHandler('awoo', awoo_reply))
     application.add_handler(CommandHandler('help', help_command))
     application.add_handler(CommandHandler('getmessage', send_message_command))
@@ -184,6 +195,8 @@ if __name__ == '__main__':
     application.add_handler(CommandHandler('stop', stop_command))
     application.add_handler(CommandHandler('stopconfirm', stop_confirm_command))
     application.add_handler(CommandHandler('update', update_data_command))
+    application.add_handler(MessageHandler(filters.Regex(re.compile(AWOO_PATTERN, re.I)), awoo_reply))
+    application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), parse_all_messages))
     application.add_handler(MessageHandler(filters.COMMAND, unknown_command))
 
     application.run_polling()
