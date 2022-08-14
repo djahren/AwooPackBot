@@ -4,6 +4,8 @@
 /blork
 awoo
 Awoo!
+@AwooPackBot
+I love awoopackbot!
 /update
 /getmessage
 /setdailyreminder 4:20
