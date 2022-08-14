@@ -55,6 +55,7 @@ def load_chats(application):
     chats = get_chats_from_file()
     for chat_id in chats: #load reminders
         logging.info(chat_id)
+        set_stop_armed(chat_id=chat_id, armed=False)
         context = ContextTypes.DEFAULT_TYPE(application=application, chat_id=chat_id)
         for daily_id in chats[chat_id]["daily_reminders"]:
             register_daily_reminder(context=context, chat_id=chat_id, 
@@ -96,6 +97,9 @@ async def set_daily_reminder_command(update: Update, context: ContextTypes.DEFAU
         matches = match_time_string(time_string=context.args[0])
         if matches:
             hours,minutes = matches
+            if hours > 23 or minutes > 59:
+                await context.bot.send_message(chat_id=chat_id, text=msg["err_too_much_time"])
+                return
             add_chat_if_not_exist(update.effective_chat)
             job_name = get_job_name(chat_id, hours, minutes)
             if not job_name in chats[chat_id]["daily_reminders"]:
