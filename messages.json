@@ -1,14 +1,4 @@
 {
-    "awoo":[
-        "Awo0o0o0o!",
-        "Gary, quit it, you're gonna start a howl!",
-        "Ow ow owooooooooooo!",
-        "Arf?",
-        "UwU",
-        "*mournful howl*",
-        "Awoo! ^.^",
-        "Awoo?"
-    ],
     "cmd_help": "Available commands:/getmessage: gets a random message.\n/help: shows this message.\n/start: registers the chat with the bot.\n/listdailyreminders lists all current reminders for the chat.\n/setdailyreminder 12:34 registers a daily reminder at the 24h time specified.\n/stopdailyreminder 12:34 removes a daily reminder at the 24h time specified.\n/stop: removes all scheduled reminders for this chat and unregisters this chat.\n/update: updates the bot's data from the database.",
     "cmd_start":"Awo0o0o! Harro, welcome to AwooPackBot, I've registered this chat in my database.\nUse /help to see a list of commands I respond to.",
     "cmd_set_daily_succcess": "I've registered a daily reminder for the time you requested. Use /listdailyreminders to see what reminders are scheduled for this chat.",

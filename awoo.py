@@ -63,7 +63,7 @@ def load_chats(application):
 
 async def awoo_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.is_bot: return
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=choice(msg["awoo"]), 
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=choice(data["words"]["awoo"]), 
         reply_to_message_id=update.message.id) 
 
 async def send_reminder_job(context: ContextTypes.DEFAULT_TYPE) -> None: #called by scheduled job
@@ -200,6 +200,7 @@ if __name__ == '__main__':
     application.add_handler(CommandHandler('stopconfirm', stop_confirm_command))
     application.add_handler(CommandHandler('update', update_data_command))
     application.add_handler(MessageHandler(filters.Regex(re.compile(AWOO_PATTERN, re.I)), awoo_reply))
+    application.add_handler(MessageHandler(filters.Regex(re.compile(BOT_NAME, re.I)), awoo_reply))
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), parse_all_messages))
     application.add_handler(MessageHandler(filters.COMMAND, unknown_command))
 
