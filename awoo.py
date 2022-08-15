@@ -136,6 +136,114 @@ async def stop_daily_reminder_command(update: Update, context: ContextTypes.DEFA
             return
     await context.bot.send_message(chat_id=chat_id, text=msg["err_24h_format"])
 
+async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    if not context.args:
+        await context.bot.send_message(chat_id=chat_id, text=msg["err_reminder_need_more_info"])
+        return
+    
+    print(context.args)
+    reminder = {
+        "from": update.effective_user.username,
+        "target": context.args[0],
+        "subject": "",
+        "when": {}
+    }
+    indicies = {}
+    indicies_order = []
+    keys = ["to","at","on","in","tomorrow"]
+    for index,arg in enumerate([a.lower() for a in context.args]):
+        #get ranges for each part of the sentence structure
+        if arg in keys:
+            indicies[arg] = {
+                "index": index,
+                "from": -1,
+                "to": -1,
+                "value": ""
+            }
+            indicies_order.append(arg)
+        else:
+            if indicies:
+                i = indicies_order[len(indicies)-1]
+                if indicies[i]["from"] == -1:
+                    indicies[i]["from"] = index
+                else: indicies[i]["to"] = index
+
+    if not indicies:
+        await context.bot.send_message(chat_id=chat_id, text=msg["err_reminder_need_more_info"])
+        return
+
+    def get_end_index(item:dict):
+        if item["to"] == -1: return item["from"] + 1
+        else: return item["to"] + 1
+
+    for key in indicies:
+        i = indicies[key]
+        indicies[key]["value"] = " ".join(context.args[i["from"]:get_end_index(i)])
+
+    if reminder["target"].lower() == "me": reminder["target"] = f"{reminder['from']}"
+    else: reminder["target"] = reminder["target"].lstrip("@")
+
+    if "to" in indicies:
+        # reminder["subject"] = " ".join(context.args[indicies["to"]["index"]:get_end_index(indicies["to"])])
+        reminder["subject"] = f"to {indicies['to']['value']}"
+    else: 
+        first_key = indicies_order[0]
+        subject_end_index = indicies[first_key]["index"]
+        reminder["subject"] = " ".join(context.args[1:subject_end_index])
+    
+    when = datetime.now()
+    if "in" in indicies:
+        try: 
+            how_many = int(context.args[indicies["in"]["from"]])
+            units = context.args[indicies["in"]["from"] + 1].lower()
+            if units.startswith("min"):
+                when += timedelta(minutes=how_many)
+            elif units.startswith("hour"):
+                when += timedelta(hours=how_many)
+            elif units.startswith("day"):
+                when += timedelta(days=how_many)
+        except:
+            await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_parse_time"])
+            return
+    elif "at" in indicies:
+        when = parse_time(indicies["at"]["value"])
+        if not when:
+            await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_parse_time"])
+            return
+        if "on" in indicies:
+            on_date = parse_date(indicies["on"]["value"])
+            if not on_date:
+                await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_parse_date"])
+                return
+            when = when.replace(year=on_date.year, month=on_date.month, day=on_date.day)
+        elif "tomorrow" in indicies:
+            when += timedelta(days=1)
+    else:
+        await context.bot.send_message(chat_id=chat_id, text=msg["err_reminder_need_at"])
+        return
+    if when < datetime.now():
+        await context.bot.send_message(chat_id=chat_id, text=msg["err_reminder_in_past"])
+        return
+
+    reminder["when"] = date_to_dict(when)
+    await context.bot.send_message(chat_id=chat_id, text=json.dumps(reminder, indent=4))
+
+    # print(indicies)
+    print(reminder)
+
+async def remind_me_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.args.insert(0,"me")
+    await remind_command(update=update, context=context)
+
+async def time_test_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if context.args:
+        time_string = " ".join(context.args)
+        parsed = parse_time(time_string)
+        print(parsed)
+        if parsed: parsed = parsed.isoformat()
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=parsed)
+
 async def update_data_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global data
     data = get_data_from_google()
@@ -195,6 +303,9 @@ if __name__ == '__main__':
     application.add_handler(CommandHandler('listdailyreminders', list_daily_reminders_command))
     application.add_handler(CommandHandler('setdailyreminder', set_daily_reminder_command))
     application.add_handler(CommandHandler('stopdailyreminder', stop_daily_reminder_command))
+    application.add_handler(CommandHandler('remind', remind_command))
+    application.add_handler(CommandHandler('remindme', remind_me_command))
+    application.add_handler(CommandHandler('time', time_test_command))
     application.add_handler(CommandHandler('start', start_command))
     application.add_handler(CommandHandler('stop', stop_command))
     application.add_handler(CommandHandler('stopconfirm', stop_confirm_command))

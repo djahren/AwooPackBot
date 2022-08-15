@@ -10,9 +10,14 @@
     "err_24h_format": "This command requires a time specified in 24 hour format.",
     "err_already_exists":"A reminder for that time is already set for this chat.",
     "err_cant_find_reminder": "I couldn't find a reminder for this chat at that time.",
+    "err_cant_parse_date": "placeholder",
+    "err_cant_parse_time": "placeholder",
     "err_cant_schedule_jobs": "I had trouble scheduling that reminder. 🥺 I'm sorry, please check the logs for more info.",
     "err_chat_not_in_db": "I don't currently have this chat registered in my database.",
     "err_no_reminders": "I'm not seeing any scheduled reminders for this chat.",
+    "err_reminder_in_past": "Woah, pump the brakes there Marty McFly! This isn't Back to the Future, unfortunately we can only travel linearly in time.",
+    "err_reminder_need_at": "placeholder",
+    "err_reminder_need_more_info": "placeholder",
     "err_stop_not_armed": "I can't perform this action until you run /stop first.",
     "err_too_much_time": "Looks like someone's got too much time on their hands. Please use 24h time format where hours are 23 or less and minutes are 59 or less."
 }
