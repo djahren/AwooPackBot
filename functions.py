@@ -26,15 +26,17 @@ def get_data_from_google() -> dict:
         data["words"][key] = new_words
     return data
 
+def  get_time_of_day() -> str:
+    now = datetime.now(PACIFIC_TZ)
+    if now.hour < 12:   return "morning" 
+    elif now.hour < 18: return "afternoon"
+    else:               return "evening"
+
 def generate_message(data: dict):
     words = data["words"]
     formats = data["formats"]
     the_message = str(choice(formats)) #pick a format
-    now = datetime.now(PACIFIC_TZ)
-    if now.hour < 12:   tod = "morning" 
-    elif now.hour < 18: tod = "afternoon"
-    else:               tod = "evening"
-
+    tod = get_time_of_day()
     vars_to_replace = re.findall(r'\%[a-z_]+\%',the_message) #get all variables
     for index, current_var in enumerate(vars_to_replace): #loop through and replace each one
         key = str(current_var).replace('%','')
@@ -48,8 +50,11 @@ def generate_message(data: dict):
 
     return the_message.replace('%tod%', tod) #return message and replace %tod% if it exists
 
-def get_job_name(chat_id: int, hours: int, minutes: int) -> str:
+def get_recurring_job_name(chat_id:int, hours:int, minutes:int) -> str:
     return f"{chat_id}_{hours}_{minutes}"
+
+def get_onetime_job_name(chat_id:int, reminder:dict)->str:
+    return f"{chat_id}_{reminder['from']}_{reminder['when']['month']}_{reminder['when']['day']}_{reminder['when']['hour']}_{reminder['when']['minute']}"
 
 def get_current_time_string() -> str:
     return datetime.now(PACIFIC_TZ).strftime("%H:%M:%S")
@@ -125,17 +130,19 @@ def parse_date(date_string:str) -> datetime:
         return False
     elif date_string == "tomorrow":
         return now + timedelta(days=1)
-    elif date_match_intl:
+    elif date_match_intl != None:
         y = int(date_match_intl[1])
         m = int(date_match_intl[2])
         d = int(date_match_intl[3])
     elif date_match_us:
-        m = int(date_match_intl[1])
-        d = int(date_match_intl[2])
-        if len(date_match_us) == 4:
-            y = int(date_match_intl[3])
-        else:
+        m = int(date_match_us[1])
+        d = int(date_match_us[2])
+        try: 
+            y = int(date_match_us[3])
+        except: 
             y = now.year
+            if now.replace(month=m, day=d) < now:
+                y += 1
     try: return now.replace(year=y, month=m, day=d)
     except: return False 
 
@@ -148,3 +155,7 @@ def date_to_dict(datetime_object:datetime) -> dict:
         "minute": datetime_object.minute,
         "second": datetime_object.second,
     }
+
+def dict_to_date(dict_object:dict) -> datetime:
+    return datetime(year=dict_object["year"], month=dict_object["month"], day=dict_object["day"],
+        hour=dict_object["hour"], minute=dict_object["minute"], second=dict_object["second"], tzinfo=PACIFIC_TZ)
