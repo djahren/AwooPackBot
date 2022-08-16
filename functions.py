@@ -1,9 +1,13 @@
 #helper funtions
-from constants import *
-import json,re
-from random import choice
+import json
+import re
 from datetime import datetime, timedelta
+from random import choice
+
 import pandas as pd
+from telegram import Update
+
+from constants import *
 
 def get_data_from_google() -> dict:
     formats_url = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Formats"
@@ -58,11 +62,6 @@ def get_onetime_job_name(chat_id:int, reminder:dict)->str:
 
 def get_current_time_string() -> str:
     return datetime.now(PACIFIC_TZ).strftime("%H:%M:%S")
-
-def match_time_string(time_string) -> tuple:
-    matches = re.match(r'([0-2]?\d):??([0-5]\d)', time_string)
-    if matches: return (int(matches[1]), int(matches[2]))
-    else: return ()
 
 def get_system_messages() -> dict:
     with open(MESSAGES_FILE_PATH, "r") as msg_file:
@@ -148,14 +147,17 @@ def parse_date(date_string:str) -> datetime:
 
 def date_to_dict(datetime_object:datetime) -> dict:
     return {
-        "year": datetime_object.year,
-        "month": datetime_object.month,
-        "day": datetime_object.day,
-        "hour": datetime_object.hour,
-        "minute": datetime_object.minute,
-        "second": datetime_object.second,
+        "year": datetime_object.year, "month": datetime_object.month, "day": datetime_object.day,
+        "hour": datetime_object.hour, "minute": datetime_object.minute, "second": datetime_object.second,
     }
 
 def dict_to_date(dict_object:dict) -> datetime:
     return datetime(year=dict_object["year"], month=dict_object["month"], day=dict_object["day"],
         hour=dict_object["hour"], minute=dict_object["minute"], second=dict_object["second"], tzinfo=PACIFIC_TZ)
+
+async def is_user_chat_admin(update: Update):
+    if update.effective_chat.id >= 0: return True #private
+    admins = await update.effective_chat.get_administrators()
+    for admin in admins:
+        if admin.user.id == update.effective_user.id: return True
+    return False

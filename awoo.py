@@ -1,10 +1,15 @@
-import logging, re, sys
+import logging
+import re
+import sys
+from datetime import time, timedelta
+from random import choice
+
+from telegram import Chat, Update
+from telegram.ext import (ApplicationBuilder, CommandHandler, ContextTypes,
+                          MessageHandler, filters)
+
 from constants import *
 from functions import *
-from telegram import Update,Chat
-from telegram.ext import filters, MessageHandler, ApplicationBuilder, CommandHandler, ContextTypes
-from datetime import time,timedelta
-from random import choice
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -138,13 +143,13 @@ async def list_reminders_command(update: Update, context: ContextTypes.DEFAULT_T
 
 async def set_daily_reminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
+    if not await is_user_chat_admin(update=update):
+        await context.bot.send_message(chat_id=chat_id, text=msg["err_admin_required"])
+        return
     if context.args:
-        matches = match_time_string(time_string=context.args[0])
+        matches = parse_time(time_string=' '.join(context.args))
         if matches:
-            hours,minutes = matches
-            if hours > 23 or minutes > 59:
-                await context.bot.send_message(chat_id=chat_id, text=msg["err_too_much_time"])
-                return
+            hours,minutes = (matches.hour, matches.minute)
             add_chat_if_not_exist(update.effective_chat)
             job_name = get_recurring_job_name(chat_id, hours, minutes)
             if not job_name in chats[chat_id][DAILY]:
@@ -162,10 +167,13 @@ async def set_daily_reminder_command(update: Update, context: ContextTypes.DEFAU
 
 async def stop_daily_reminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
+    if not await is_user_chat_admin(update=update):
+        await context.bot.send_message(chat_id=chat_id, text=msg["err_admin_required"])
+        return
     if context.args:
-        matches = match_time_string(time_string=context.args[0])
+        matches = parse_time(time_string=' '.join(context.args))
         if matches:
-            hours,minutes = matches
+            hours,minutes = (matches.hour,matches.minute)
             job_name = get_recurring_job_name(chat_id, hours=hours, minutes=minutes)
             current_jobs = context.job_queue.get_jobs_by_name(job_name)
             if current_jobs:

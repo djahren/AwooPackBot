@@ -9,6 +9,7 @@
     "cmd_unknown": "Sorry, I don't know that trick.🥺🦴",
     "cmd_update": "I've updated the my database from the Google Sheet.",
     "err_24h_format": "This command requires a time specified in 24 hour format.",
+    "err_admin_required":"This command requires admin privilidges in this chat to run.",
     "err_already_exists":"A reminder for that time is already set for this chat.",
     "err_cant_find_reminder": "I couldn't find a reminder for this chat at that time.",
     "err_cant_parse_date": "I wasn't able to figure out the date you entered. Please re-enter it using the 'on' keyword, in the format (mm/dd, mm/dd/yyyy, or yyyy-mm-dd).",
