@@ -1,5 +1,6 @@
 {
     "cmd_help": "Available commands:/getmessage: gets a random message.\n/help: shows this message.\n/start: registers the chat with the bot.\n/listdailyreminders lists all current reminders for the chat.\n/setdailyreminder 12:34 registers a daily reminder at the 24h time specified.\n/stopdailyreminder 12:34 removes a daily reminder at the 24h time specified.\n/stop: removes all scheduled reminders for this chat and unregisters this chat.\n/update: updates the bot's data from the database.",
+    "cmd_reminder_succcess":"I've set your reminder! To see a list of all reminders use /listreminders",
     "cmd_start":"Awo0o0o! Harro, welcome to AwooPackBot, I've registered this chat in my database.\nUse /help to see a list of commands I respond to.",
     "cmd_set_daily_succcess": "I've registered a daily reminder for the time you requested. Use /listdailyreminders to see what reminders are scheduled for this chat.",
     "cmd_stop_daily_success": "I've removed the requested daily reminder.",
@@ -10,14 +11,14 @@
     "err_24h_format": "This command requires a time specified in 24 hour format.",
     "err_already_exists":"A reminder for that time is already set for this chat.",
     "err_cant_find_reminder": "I couldn't find a reminder for this chat at that time.",
-    "err_cant_parse_date": "placeholder",
-    "err_cant_parse_time": "placeholder",
+    "err_cant_parse_date": "I wasn't able to figure out the date you entered. Please re-enter it using the 'on' keyword, in the format (mm/dd, mm/dd/yyyy, or yyyy-mm-dd).",
+    "err_cant_parse_time": "I wasn't able to figure out the time you entered. Please re-enter it using the 'at' or 'in' keywords.",
     "err_cant_schedule_jobs": "I had trouble scheduling that reminder. 🥺 I'm sorry, please check the logs for more info.",
     "err_chat_not_in_db": "I don't currently have this chat registered in my database.",
     "err_no_reminders": "I'm not seeing any scheduled reminders for this chat.",
     "err_reminder_in_past": "Woah, pump the brakes there Marty McFly! This isn't Back to the Future, unfortunately we can only travel linearly in time.",
-    "err_reminder_need_at": "placeholder",
-    "err_reminder_need_more_info": "placeholder",
+    "err_reminder_need_at": "To set your reminder, please use the 'at' keyword and specify a time (i.e. at 5:30pm) or use the 'in' keyword and specify a number and units (i.e. in 5 minutes).",
+    "err_reminder_too_far_out": "✌ Too far out, fam! ☮ This date is groovy but I can only see a year into the future. Try setting a reminder within the next 365 days.",
     "err_stop_not_armed": "I can't perform this action until you run /stop first.",
     "err_too_much_time": "Looks like someone's got too much time on their hands. Please use 24h time format where hours are 23 or less and minutes are 59 or less."
 }

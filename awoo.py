@@ -67,7 +67,7 @@ def load_chats(application):
                 hours=int(daily_id.split("_")[1]), minutes=int(daily_id.split("_")[2]))
         purge_past_reminders(chat_id)
         for onetime_id in chats[chat_id][ONETIME]:
-            register_onetime_reminder(chat_id=chat_id, reminder=chats[chat_id][ONETIME][onetime_id])
+            register_onetime_reminder(context=context, chat_id=chat_id, reminder=chats[chat_id][ONETIME][onetime_id])
 
 def purge_past_reminders(chat_id:int):
     if not chat_id in chats: return
@@ -96,7 +96,7 @@ async def send_onetime_reminder_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         reminder = chats[job.chat_id][ONETIME][job.name]
         from_user = reminder['from'] if reminder['from'] != reminder['target'] else "You"
-        message = f"{choice(data['words']['greeting']).replace('%tod%',get_time_of_day())} @{reminder['target']}! {from_user} asked me to remind you {reminder['subject']}"
+        message = f"{choice(data['words']['greeting']).replace('%tod%',get_time_of_day())} @{reminder['target']}! {from_user} asked me to remind you {reminder['subject']}."
         await context.bot.send_message(chat_id=job.chat_id, text=message)
     except Exception as e:
         logging.info(f"Failed sending job: {job.name} at {get_current_time_string()} with the following error: {str(e)}")
@@ -114,24 +114,24 @@ async def list_reminders_command(update: Update, context: ContextTypes.DEFAULT_T
     purge_past_reminders(chat_id)
     if chat_id in chats:
         reminders_list_msg = ""
-        has_reminders = False
-        reminders = chats[chat_id][ONETIME]
-        if reminders:
-            has_reminders = True
-            reminders_list_msg += "This chat has the following one-time reminders set:\n"
-            for re_key in reminders: 
-                reminder = reminders[re_key]
-                when = dict_to_date(reminder['when']).strftime("%b %-d @ %-I:%M %p")
-                reminders_list_msg += f"{when} reminding {reminder['target']}: {reminder['subject']}\n"    
-        reminders = chats[chat_id][DAILY]
-        if reminders:
-            has_reminders = True
+        daily_reminders = chats[chat_id][DAILY]
+        onetime_reminders = chats[chat_id][ONETIME]
+        if daily_reminders:
             reminders_list_msg += "This chat has the following daily reminder messages set:\n"
-            for re_key in reminders: 
+            for re_key in daily_reminders: 
                 hours = int(re_key.split("_")[1])
                 minutes = int(re_key.split("_")[2])
                 reminders_list_msg += f"{hours:02d}:{minutes:02d}\n"
-        if has_reminders:
+        if onetime_reminders:
+            if reminders_list_msg: reminders_list_msg += "\n"
+            reminders_list_msg += "This chat has the following one-time reminders set:\n"
+            for re_key in onetime_reminders: 
+                reminder = onetime_reminders[re_key]
+                when = dict_to_date(reminder['when'])
+                d = when.strftime("%m/%d")
+                t = when.strftime('%I:%M %p')
+                reminders_list_msg += f"{d} @ {t} for {reminder['target']}: {reminder['subject']}\n"    
+        if daily_reminders or onetime_reminders:
             await context.bot.send_message(chat_id=chat_id, text=reminders_list_msg)       
             return
     await context.bot.send_message(chat_id=chat_id, text=msg["err_no_reminders"])         
@@ -181,6 +181,12 @@ async def stop_daily_reminder_command(update: Update, context: ContextTypes.DEFA
             return
     await context.bot.send_message(chat_id=chat_id, text=msg["err_24h_format"])
 
+async def stop_reminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    if context.args:
+        pass
+    await context.bot.send_message(chat_id=chat_id, text="Placeholder")
+
 async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     if not context.args:
@@ -213,7 +219,7 @@ async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else: indicies[i]["to"] = index
 
     if not indicies:
-        await context.bot.send_message(chat_id=chat_id, text=msg["err_reminder_need_more_info"])
+        await context.bot.send_message(chat_id=chat_id, text=msg["err_reminder_need_at"])
         return
 
     def get_end_index(item:dict):
@@ -269,7 +275,9 @@ async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if when < datetime.now(tz=PACIFIC_TZ):
         await context.bot.send_message(chat_id=chat_id, text=msg["err_reminder_in_past"])
         return
-
+    elif when > datetime.now(tz=PACIFIC_TZ) + timedelta(days=365):
+        await context.bot.send_message(chat_id=chat_id, text=msg["err_reminder_too_far_out"])
+        return
     reminder["when"] = date_to_dict(when)
     await context.bot.send_message(chat_id=chat_id, text=json.dumps(reminder, indent=4))
 
@@ -280,7 +288,7 @@ async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if job: 
             chats[chat_id][ONETIME][job_name] = reminder
             save_chats_to_file(chats)
-            await context.bot.send_message(chat_id=chat_id, text=msg["cmd_set_daily_succcess"])
+            await context.bot.send_message(chat_id=chat_id, text=msg["cmd_reminder_succcess"])
         else:
             await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_schedule_jobs"])
     else:
@@ -359,6 +367,7 @@ if __name__ == '__main__':
     application.add_handler(CommandHandler(['listdailyreminders','listdailymessages','listreminders'], list_reminders_command))
     application.add_handler(CommandHandler('setdailyreminder', set_daily_reminder_command))
     application.add_handler(CommandHandler('stopdailyreminder', stop_daily_reminder_command))
+    application.add_handler(CommandHandler('stopreminder', stop_reminder_command))
     application.add_handler(CommandHandler('remind', remind_command))
     application.add_handler(CommandHandler('remindme', remind_me_command))
     application.add_handler(CommandHandler('time', time_test_command))

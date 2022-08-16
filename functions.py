@@ -115,7 +115,7 @@ def parse_time(time_string:str) -> datetime:
     if hours > 23 or minutes > 59: return False
     now = datetime.now()
     add_days = 1 if (hours * 60 + minutes) < (now.hour * 60 + now.minute) else 0
-    return datetime.now().replace(hour=hours, minute=minutes, second=0) + timedelta(days=add_days)
+    return datetime.now(tz=PACIFIC_TZ).replace(hour=hours, minute=minutes, second=0) + timedelta(days=add_days)
 
 def parse_date(date_string:str) -> datetime:
     date_string = date_string.lower()
