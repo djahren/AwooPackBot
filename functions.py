@@ -105,12 +105,11 @@ def parse_time(time_string:str) -> datetime:
         how_many = int(match_in[1])
         if how_many < 1: return False
         units = match_in[2]
-        when = now
-        if units.startswith("min"): when += timedelta(minutes=how_many)
-        elif units.startswith("hour"): when += timedelta(hours=how_many)
-        elif units.startswith("day"): when += timedelta(days=how_many)
-        elif units.startswith("week"): when += timedelta(days=how_many*7)
-        hours,minutes,seconds = (when.hour,when.minute,when.second)
+        if units.startswith("min"): now += timedelta(minutes=how_many)
+        elif units.startswith("hour"): now += timedelta(hours=how_many)
+        elif units.startswith("day"): now += timedelta(days=how_many)
+        elif units.startswith("week"): now += timedelta(days=how_many*7)
+        return now
     elif match_12: 
         hours = int(match_12[1])
         minutes = int(match_12[2] or 0)
@@ -124,7 +123,7 @@ def parse_time(time_string:str) -> datetime:
         return False
     if hours > 23 or minutes > 59: return False
     add_days = 1 if (hours * 60 + minutes) < (now.hour * 60 + now.minute) else 0
-    return datetime.now(tz=PACIFIC_TZ).replace(hour=hours, minute=minutes, second=seconds) + timedelta(days=add_days)
+    return now.replace(hour=hours, minute=minutes, second=seconds) + timedelta(days=add_days)
 
 def parse_date(date_string:str) -> datetime:
     date_string = date_string.lower()

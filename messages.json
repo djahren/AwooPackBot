@@ -10,7 +10,7 @@
     "cmd_update": "I've updated the my database from the Google Sheet.",
     "err_24h_format": "This command requires a time specified in 24 hour format.",
     "err_admin_required":"This command requires admin privilidges in this chat to run.",
-    "err_already_exists":"A reminder for that time is already set for this chat.",
+    "err_already_exists":"A reminder for that time is already set for this chat. Use /listreminders to see all reminders.",
     "err_cant_find_reminder": "I couldn't find a reminder for this chat at that time.",
     "err_cant_parse_date": "I wasn't able to figure out the date you entered. Please re-enter it using the 'on' keyword, in the format (mm/dd, mm/dd/yyyy, or yyyy-mm-dd).",
     "err_cant_parse_time": "I wasn't able to figure out the time you entered. Please re-enter it using the 'at' or 'in' keywords.",
@@ -19,6 +19,7 @@
     "err_no_reminders": "I'm not seeing any scheduled reminders for this chat.",
     "err_reminder_in_past": "Woah, pump the brakes there Marty McFly! This isn't Back to the Future, unfortunately we can only travel linearly in time.",
     "err_reminder_need_at": "To set your reminder, please use the 'at' keyword and specify a time (i.e. at 5:30pm) or use the 'in' keyword and specify a number and units (i.e. in 5 minutes).",
+    "err_reminder_no_subject": "I'm sorry, I couldn't find a subject for your reminder.",
     "err_reminder_too_far_out": "✌ Too far out, fam! ☮ This date is groovy but I can only see a year into the future. Try setting a reminder within the next 365 days.",
     "err_stop_not_armed": "I can't perform this action until you run /stop first.",
     "err_too_much_time": "Looks like someone's got too much time on their hands. Please use 24h time format where hours are 23 or less and minutes are 59 or less."
