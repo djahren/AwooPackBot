@@ -195,7 +195,7 @@ async def remove_reminder_command(update: Update, context: ContextTypes.DEFAULT_
 async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     if len(context.args) < 4:
-        await context.bot.send_message(chat_id=chat_id, text=msg["err_reminder_need_more_info"])
+        await context.bot.send_message(chat_id=chat_id, text=msg["err_reminder_need_at"])
         return
     reminder = {
         "from": update.effective_user.username,
@@ -207,25 +207,34 @@ async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     now = datetime.now(tz=PACIFIC_TZ)
     when = now 
     keywords = {"at": 2,"in": 2,"on": 1,"tomorrow": 0}
+    skip_next = False
     for index,word in enumerate([a.lower() for a in context.args]):
         #get ranges for each part of the sentence structure
+        if skip_next:
+            skip_next = False
+            continue
         if word in keywords:
             cur_kw = word
             if not word in indicies:
                 indicies[word] = {"index": index, "from": -1, "to": -1, "value": "", "finished": False}
         else:
             if indicies:
-                if indicies[cur_kw]["finished"] == False:
-                    if indicies[cur_kw]["from"] == -1: indicies[cur_kw]["from"] = index
-                    indicies[cur_kw]["to"] = index + 1
-                    words = context.args[indicies[cur_kw]["from"]:indicies[cur_kw]["to"]]
-                    value = " ".join(words)
-                    indicies[cur_kw]["value"] = value
-                d,t = (parse_date(value), parse_time(value))
+                if indicies[cur_kw]["finished"]: continue
 
-                if cur_kw in["at","in"] and t:
+                if indicies[cur_kw]["from"] == -1: indicies[cur_kw]["from"] = index
+                indicies[cur_kw]["to"] = index + 1
+                words = context.args[indicies[cur_kw]["from"]:indicies[cur_kw]["to"]]
+                value = " ".join(words)
+                indicies[cur_kw]["value"] = value
+                d,t = (parse_date(value), parse_time(value))
+                greedy = False if index + 1 >= len(context.args) else parse_time(value + context.args[index+1])
+                if cur_kw in["at","in"] and (t or greedy):
                     indicies[cur_kw]["finished"] = True
-                    if t != now and when.day == now.day: 
+                    if greedy: 
+                        t = greedy
+                        skip_next = True
+                        indicies[cur_kw]["to"] += 1
+                    if t.date() != now.date() and when.date() == now.date(): 
                         #if parse_time modifies date, and the date hasn't been modified elsewhere
                         when = t
                     else:
@@ -240,6 +249,8 @@ async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     pass
                 else: #couldn't parse kw, likely used in subject
                     indicies.pop(cur_kw)
+
+    logging.info(indicies)
 
     if not "at" in indicies and not "in" in indicies:
         await context.bot.send_message(chat_id=chat_id, text=msg["err_reminder_need_at"])
@@ -258,10 +269,12 @@ async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reminder["subject"] = " ".join([w for w in subject_words[1:] if w != ""])
     reminder["when"] = date_to_dict(when)
     
-    logging.info(indicies)
     logging.info(reminder)
 
-    if when < now:
+    if not reminder["subject"]:
+        await context.bot.send_message(chat_id=chat_id, text=msg["err_reminder_no_subject"])
+        return
+    elif when < now:
         await context.bot.send_message(chat_id=chat_id, text=msg["err_reminder_in_past"])
         return
     elif when > now + timedelta(days=365):
