@@ -88,7 +88,11 @@ def get_chats_from_file() -> dict:
 
 def parse_time(time_string:str) -> datetime:
     time_string = time_string.lower().strip()
-    t = {}
+    now = datetime.now(tz=PACIFIC_TZ)
+    match_in = re.search(TIME_PATTERN_IN, time_string)
+    match_12 = re.search(TIME_PATTERN_12H, time_string)
+    match_24 = re.search(TIME_PATTERN_24H, time_string)
+    seconds = 0
     if re.search(r"midnight", time_string):
         hours = 0
         minutes = 0
@@ -97,24 +101,30 @@ def parse_time(time_string:str) -> datetime:
         hours = 12
         minutes = 0
         am = False
-    else:
-        match_12 = re.search(TIME_PATTERN_12H, time_string)
-        match_24 = re.search(TIME_PATTERN_24H, time_string)
-        if not match_12 and not match_24: return False
-        if match_12: 
-            hours = int(match_12[1])
-            minutes = int(match_12[2] or 0)
-            am = match_12[3][0] == "a"
-        elif match_24: 
-            hours = int(match_24[1])
-            minutes = int(match_24[2] or 0)
-            am = hours < 12
+    elif match_in:
+        how_many = int(match_in[1])
+        if how_many < 1: return False
+        units = match_in[2]
+        when = now
+        if units.startswith("min"): when += timedelta(minutes=how_many)
+        elif units.startswith("hour"): when += timedelta(hours=how_many)
+        elif units.startswith("day"): when += timedelta(days=how_many)
+        elif units.startswith("week"): when += timedelta(days=how_many*7)
+        hours,minutes,seconds = (when.hour,when.minute,when.second)
+    elif match_12: 
+        hours = int(match_12[1])
+        minutes = int(match_12[2] or 0)
+        am = match_12[3][0] == "a"
         if hours == 12 and am: hours = 0
         elif hours < 12 and not am: hours += 12
+    elif match_24: 
+        hours = int(match_24[1])
+        minutes = int(match_24[2])
+    else:
+        return False
     if hours > 23 or minutes > 59: return False
-    now = datetime.now()
     add_days = 1 if (hours * 60 + minutes) < (now.hour * 60 + now.minute) else 0
-    return datetime.now(tz=PACIFIC_TZ).replace(hour=hours, minute=minutes, second=0) + timedelta(days=add_days)
+    return datetime.now(tz=PACIFIC_TZ).replace(hour=hours, minute=minutes, second=seconds) + timedelta(days=add_days)
 
 def parse_date(date_string:str) -> datetime:
     date_string = date_string.lower()
@@ -161,3 +171,9 @@ async def is_user_chat_admin(update: Update):
     for admin in admins:
         if admin.user.id == update.effective_user.id: return True
     return False
+
+def format_onetime_reminder(reminder):
+    when = dict_to_date(reminder['when'])
+    d = when.strftime("%m/%d")
+    t = when.strftime('%I:%M %p')
+    return f"{d} @ {t} for {reminder['target']}: {reminder['subject']}"
