@@ -20,6 +20,13 @@ I love awoopackbot!
 /remind me to take out the trash at 6pm
 /remind me to test the stuff on thursday
 /remind me about bushes baked beans on thursday at 23:59
+/remind me to drink some water at 2pm
+/remindme at 1900 tomorrow to nom nom nom
+/remind @AwooPackBot on Thursday to howl at the moon at midnight
+/remind @Everyone to freak out at 11:59 pm on 12/31/1999
+/remindme that you should get some snacks at 3a
+/remind me to do a little dance in 5 minutes
+/remindme to yodel at turtles in 1 week at 4:20 p.m.
 /stop
 /stopconfirm
 /stop
