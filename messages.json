@@ -13,7 +13,9 @@
     "err_already_exists":"A reminder for that time is already set for this chat. Use /listreminders to see all reminders.",
     "err_cant_find_reminder": "I couldn't find a reminder for this chat at that time.",
     "err_cant_parse_date": "I wasn't able to figure out the date you entered. Please re-enter it using the 'on' keyword, in the format (mm/dd, mm/dd/yyyy, or yyyy-mm-dd).",
-    "err_cant_parse_time": "I wasn't able to figure out the time you entered. Please re-enter 12h, 24h, or military time formats",
+    "err_cant_parse_time": "I wasn't able to figure out the time you entered. Please re-enter 12h, 24h, or military time formats.",
+    "err_cant_remove_reminder": "I wasn't able to remove the reminder you specified.",
+    "err_remove_permissions": "You don't have permissions to remove any current reminders in this chat.",
     "err_cant_schedule_jobs": "I had trouble scheduling that reminder. 🥺 I'm sorry, please check the logs for more info.",
     "err_chat_not_in_db": "I don't currently have this chat registered in my database.",
     "err_no_reminders": "I'm not seeing any scheduled reminders for this chat.",
@@ -21,7 +23,7 @@
     "err_reminder_need_at": "To set your reminder, please use the 'at' keyword and specify a time (i.e. at 5:30pm) or use the 'in' keyword and specify a number and units (i.e. in 5 minutes).",
     "err_reminder_no_subject": "I'm sorry, I couldn't find a subject for your reminder.",
     "err_reminder_too_far_out": "✌ Too far out, fam! ☮ This date is groovy but I can only see a year into the future. Try setting a reminder within the next 365 days.",
-    "err_reminder_too_close": "Don't stand so close to me.🎶 That time's a bit too close, I can only schedule things that are minute or more away.",
+    "err_reminder_too_close": "That time's a bit #TooSoon, I can only schedule things that are minute or more away.",
     "err_stop_not_armed": "I can't perform this action until you run /stop first.",
     "err_too_much_time": "Looks like someone's got too much time on their hands. Please use 24h time format where hours are 23 or less and minutes are 59 or less."
 }

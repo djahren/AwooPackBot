@@ -56,10 +56,6 @@ def set_stop_armed(chat_id, armed):
         return True
     else: return False
 
-def remove_chat(chat_id: int):
-    chats.pop(chat_id)
-    save_chats_to_file(chats)
-
 def load_chats(application):
     global chats
     chats = get_chats_from_file()
@@ -186,12 +182,6 @@ async def stop_daily_reminder_command(update: Update, context: ContextTypes.DEFA
             return
     await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_parse_time"])
 
-async def remove_reminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    if context.args:
-        pass
-    await context.bot.send_message(chat_id=chat_id, text="Placeholder")
-
 async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     if len(context.args) < 4:
@@ -297,6 +287,67 @@ async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await context.bot.send_message(chat_id=chat_id, text=msg["err_already_exists"])
 
+async def remove_reminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    username = update.effective_user.username.lower()
+    reminders = dict(chats[chat_id][ONETIME])
+    delete_arg_index,delete_reminder_num = (-1,-1)
+    if not reminders:
+        await context.bot.send_message(chat_id=chat_id, text=msg["err_no_reminders"])
+        return
+    if not is_user_chat_admin(update=update):
+        for key in reminders.copy():
+            if not username in (reminders[key]["from"].lower(), reminders[key]["target"].lower()):
+                reminders.pop(key)
+        if not reminders:
+            await context.bot.send_message(chat_id=chat_id, text=msg["err_remove_permissions"])
+            return
+    if context.args:
+        for index,arg in enumerate(context.args):
+            if arg.startswith("#"): delete_arg_index = index
+        if delete_arg_index != -1:
+            time_args = context.args[0:delete_arg_index]
+            if len(context.args[delete_arg_index]) > 1:
+                try: delete_reminder_num = int(context.args[delete_arg_index].lstrip("#"))
+                except: pass
+            elif delete_arg_index + 1 < len(context.args):
+                try: delete_reminder_num = int(context.args[delete_arg_index + 1])
+                except: pass
+            if delete_reminder_num == -1:
+                await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_remove_reminder"])
+                return
+        else:
+            time_args = context.args
+        t = parse_time(" ".join(time_args))
+        if t:
+            for key in reminders.copy():
+                if not (reminders[key]["when"]["hour"] == t.hour and reminders[key]["when"]["minute"] == t.minute):
+                    reminders.pop(key)
+        elif delete_arg_index == -1:
+            await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_parse_time"])
+            return
+    if reminders:
+        reminders_msg = f"You have access to remove the following reminders{' that match your search' if context.args else ''}:\n"
+        r_sorted = sorted(reminders, key = lambda r: dict_to_date(reminders[r]["when"]).time())
+        args = ' '.join(context.args)
+        for i,key in enumerate(r_sorted):
+            n = i+1
+            reminder_str = f"#{n}: " + format_onetime_reminder(reminders[key])
+            delete_str   = f"``` /removereminder {(args + ' ') if args else ''}#{n}```" 
+            reminders_msg += reminder_str + delete_str
+            if delete_reminder_num != -1 and n == delete_reminder_num: 
+                remove_scheduled_job(context=context, job_name=key)
+                chats[chat_id][ONETIME].pop(key)
+                save_chats_to_file(chats)
+                await context.bot.send_message(chat_id=chat_id, text=f"Removing reminder {reminder_str}")
+                return
+        if delete_reminder_num == -1:
+            await context.bot.send_message(chat_id=chat_id, text=reminders_msg, parse_mode="markdown")
+        else:
+            await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_remove_reminder"])    
+    else:
+        await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_find_reminder"])
+
 async def remind_me_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.args.insert(0,"me")
     await remind_command(update=update, context=context)
@@ -331,7 +382,10 @@ async def stop_confirm_command(update: Update, context: ContextTypes.DEFAULT_TYP
         if chats[chat_id]["stop_armed"] == 1:
             for job_name in chats[chat_id][DAILY]:
                 remove_scheduled_job(context=context, job_name=job_name)
-            remove_chat(chat_id=chat_id)
+            for job_name in chats[chat_id][ONETIME]:
+                remove_scheduled_job(context=context, job_name=job_name)
+            chats.pop(chat_id)
+            save_chats_to_file(chats)
             await context.bot.send_message(chat_id=chat_id, text=msg["cmd_stop_confirm"])
         else: 
             await context.bot.send_message(chat_id=chat_id, text=msg["err_stop_not_armed"])
