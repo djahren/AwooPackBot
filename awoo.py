@@ -56,10 +56,6 @@ def set_stop_armed(chat_id, armed):
         return True
     else: return False
 
-def remove_chat(chat_id: int):
-    chats.pop(chat_id)
-    save_chats_to_file(chats)
-
 def load_chats(application):
     global chats
     chats = get_chats_from_file()
@@ -85,11 +81,6 @@ def purge_past_reminders(chat_id:int):
             chats[chat_id][ONETIME].pop(r_key)
     save_chats_to_file(chats=chats)
 
-async def awoo_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.is_bot: return
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=choice(data["words"]["awoo"]), 
-        reply_to_message_id=update.message.id) 
-
 async def send_daily_reminder_job(context: ContextTypes.DEFAULT_TYPE) -> None: #called by scheduled job
     job = context.job
     message = generate_message(data)
@@ -109,7 +100,12 @@ async def send_onetime_reminder_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         chats[job.chat_id][ONETIME].pop(job.name)
         save_chats_to_file(chats)
 
-async def send_message_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def awoo_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.is_bot: return
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=choice(data["words"]["awoo"]), 
+        reply_to_message_id=update.message.id) 
+
+async def get_message_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = generate_message(data)
     logging.info(f"Sending message: {message} at {get_current_time_string()}")
     await context.bot.send_message(chat_id=update.effective_chat.id, text=message)
@@ -160,7 +156,7 @@ async def set_daily_reminder_command(update: Update, context: ContextTypes.DEFAU
             else:
                 await context.bot.send_message(chat_id=chat_id, text=msg["err_already_exists"])
             return  
-    await context.bot.send_message(chat_id=chat_id, text=msg["err_24h_format"])
+    await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_parse_time"])
 
 async def stop_daily_reminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
@@ -184,13 +180,7 @@ async def stop_daily_reminder_command(update: Update, context: ContextTypes.DEFA
             else:
                 await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_find_reminder"])
             return
-    await context.bot.send_message(chat_id=chat_id, text=msg["err_24h_format"])
-
-async def remove_reminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    if context.args:
-        pass
-    await context.bot.send_message(chat_id=chat_id, text="Placeholder")
+    await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_parse_time"])
 
 async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
@@ -217,38 +207,37 @@ async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             cur_kw = word
             if not word in indicies:
                 indicies[word] = {"index": index, "from": -1, "to": -1, "value": "", "finished": False}
-        else:
-            if indicies:
-                if indicies[cur_kw]["finished"]: continue
+        elif indicies and cur_kw in indicies:
+            if indicies[cur_kw]["finished"]: continue
 
-                if indicies[cur_kw]["from"] == -1: indicies[cur_kw]["from"] = index
-                indicies[cur_kw]["to"] = index + 1
-                words = context.args[indicies[cur_kw]["from"]:indicies[cur_kw]["to"]]
-                value = " ".join(words)
-                indicies[cur_kw]["value"] = value
-                d,t = (parse_date(value), parse_time(value))
-                greedy = False if index + 1 >= len(context.args) else parse_time(value + context.args[index+1])
-                if cur_kw in["at","in"] and (t or greedy):
-                    indicies[cur_kw]["finished"] = True
-                    if greedy: 
-                        t = greedy
-                        skip_next = True
-                        indicies[cur_kw]["to"] += 1
-                    if t.date() != now.date() and when.date() == now.date(): 
-                        #if parse_time modifies date, and the date hasn't been modified elsewhere
-                        when = t
-                    else:
-                        when = when.replace(hour=t.hour, minute=t.minute, second=t.second)
-                elif cur_kw == "on" and d:
-                    indicies[cur_kw]["finished"] = True
-                    when = when.replace(year=d.year,  month=d.month, day=d.day)
-                elif cur_kw == "tomorrow":
-                    indicies[cur_kw]["finished"] = True
-                    when += timedelta(days=1)
-                elif cur_kw == "in" and len(words) < 2:
-                    pass
-                else: #couldn't parse kw, likely used in subject
-                    indicies.pop(cur_kw)
+            if indicies[cur_kw]["from"] == -1: indicies[cur_kw]["from"] = index
+            indicies[cur_kw]["to"] = index + 1
+            words = context.args[indicies[cur_kw]["from"]:indicies[cur_kw]["to"]]
+            value = " ".join(words)
+            indicies[cur_kw]["value"] = value
+            d,t = (parse_date(value), parse_time(value))
+            greedy = False if index + 1 >= len(context.args) else parse_time(value + context.args[index+1])
+            if cur_kw in["at","in"] and (t or greedy):
+                indicies[cur_kw]["finished"] = True
+                if greedy and cur_kw == "at": 
+                    t = greedy
+                    skip_next = True
+                    indicies[cur_kw]["to"] += 1
+                if t.date() != now.date() and when.date() == now.date(): 
+                    #if parse_time modifies date, and the date hasn't been modified elsewhere
+                    when = t
+                else:
+                    when = when.replace(hour=t.hour, minute=t.minute, second=t.second)
+            elif cur_kw == "on" and d:
+                indicies[cur_kw]["finished"] = True
+                when = when.replace(year=d.year,  month=d.month, day=d.day)
+            elif cur_kw == "tomorrow":
+                indicies[cur_kw]["finished"] = True
+                when += timedelta(days=1)
+            elif cur_kw == "in" and len(words) < 2:
+                pass
+            else: #couldn't parse kw, likely used in subject
+                indicies.pop(cur_kw)
 
     logging.info(indicies)
 
@@ -280,6 +269,9 @@ async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif when > now + timedelta(days=365):
         await context.bot.send_message(chat_id=chat_id, text=msg["err_reminder_too_far_out"])
         return
+    elif when - now < timedelta(minutes=1):
+        await context.bot.send_message(chat_id=chat_id, text=msg["err_reminder_too_close"])
+        return
 
     add_chat_if_not_exist(update.effective_chat)
     job_name = get_onetime_job_name(chat_id=chat_id, reminder=reminder)
@@ -295,11 +287,75 @@ async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await context.bot.send_message(chat_id=chat_id, text=msg["err_already_exists"])
 
+async def remove_reminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    username = update.effective_user.username.lower()
+    reminders = dict(chats[chat_id][ONETIME])
+    delete_arg_index,delete_reminder_num = (-1,-1)
+    if not reminders:
+        await context.bot.send_message(chat_id=chat_id, text=msg["err_no_reminders"])
+        return
+    if not is_user_chat_admin(update=update):
+        for key in reminders.copy():
+            if not username in (reminders[key]["from"].lower(), reminders[key]["target"].lower()):
+                reminders.pop(key)
+        if not reminders:
+            await context.bot.send_message(chat_id=chat_id, text=msg["err_remove_permissions"])
+            return
+    if context.args:
+        for index,arg in enumerate(context.args):
+            if arg.startswith("#"): delete_arg_index = index
+        if delete_arg_index != -1:
+            time_args = context.args[0:delete_arg_index]
+            if len(context.args[delete_arg_index]) > 1:
+                try: delete_reminder_num = int(context.args[delete_arg_index].lstrip("#"))
+                except: pass
+            elif delete_arg_index + 1 < len(context.args):
+                try: delete_reminder_num = int(context.args[delete_arg_index + 1])
+                except: pass
+            if delete_reminder_num == -1:
+                await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_remove_reminder"])
+                return
+        else:
+            time_args = context.args
+        t = parse_time(" ".join(time_args))
+        if t:
+            for key in reminders.copy():
+                if not (reminders[key]["when"]["hour"] == t.hour and reminders[key]["when"]["minute"] == t.minute):
+                    reminders.pop(key)
+        elif delete_arg_index == -1:
+            await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_parse_time"])
+            return
+    if reminders:
+        reminders_msg = f"You have access to remove the following reminders{' that match your search' if context.args else ''}:\n"
+        r_sorted = sorted(reminders, key = lambda r: dict_to_date(reminders[r]["when"]).time())
+        args = ' '.join(context.args)
+        for i,key in enumerate(r_sorted):
+            n = i+1
+            reminder_str = f"#{n}: " + format_onetime_reminder(reminders[key])
+            delete_str   = f"``` /removereminder {(args + ' ') if args else ''}#{n}```" 
+            reminders_msg += reminder_str + delete_str
+            if delete_reminder_num != -1 and n == delete_reminder_num: 
+                remove_scheduled_job(context=context, job_name=key)
+                chats[chat_id][ONETIME].pop(key)
+                save_chats_to_file(chats)
+                await context.bot.send_message(chat_id=chat_id, text=f"Removing reminder {reminder_str}")
+                return
+        if delete_reminder_num == -1:
+            await context.bot.send_message(chat_id=chat_id, text=reminders_msg, parse_mode="markdown")
+        else:
+            await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_remove_reminder"])    
+    else:
+        await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_find_reminder"])
+
 async def remind_me_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.args.insert(0,"me")
     await remind_command(update=update, context=context)
 
-async def update_data_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def remind_examples_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=msg["cmd_remind_examples"], parse_mode="markdown")
+
+async def update_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global data
     data = get_data_from_google()
     await context.bot.send_message(chat_id=update.effective_chat.id, text=msg["cmd_update"])
@@ -312,7 +368,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     add_chat_if_not_exist(update.effective_message.chat)
     await context.bot.send_message(chat_id=chat_id, text=msg["cmd_start"])
 
-async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def stop_all_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_message.chat_id
     if chat_id in chats: 
         set_stop_armed(chat_id=chat_id,armed=True)
@@ -326,7 +382,10 @@ async def stop_confirm_command(update: Update, context: ContextTypes.DEFAULT_TYP
         if chats[chat_id]["stop_armed"] == 1:
             for job_name in chats[chat_id][DAILY]:
                 remove_scheduled_job(context=context, job_name=job_name)
-            remove_chat(chat_id=chat_id)
+            for job_name in chats[chat_id][ONETIME]:
+                remove_scheduled_job(context=context, job_name=job_name)
+            chats.pop(chat_id)
+            save_chats_to_file(chats)
             await context.bot.send_message(chat_id=chat_id, text=msg["cmd_stop_confirm"])
         else: 
             await context.bot.send_message(chat_id=chat_id, text=msg["err_stop_not_armed"])
@@ -352,19 +411,19 @@ if __name__ == '__main__':
     
     application = ApplicationBuilder().token(token).build()
     load_chats(application)
-    application.add_handler(CommandHandler('awoo', awoo_reply))
     application.add_handler(CommandHandler('help', help_command))
-    application.add_handler(CommandHandler('getmessage', send_message_command))
-    application.add_handler(CommandHandler(['listdailyreminders','listdailymessages','listreminders'], list_reminders_command))
-    application.add_handler(CommandHandler('setdailyreminder', set_daily_reminder_command))
-    application.add_handler(CommandHandler('stopdailyreminder', stop_daily_reminder_command))
-    application.add_handler(CommandHandler('stopreminder', remove_reminder_command))
+    application.add_handler(CommandHandler('getmessage', get_message_command))
+    application.add_handler(CommandHandler(['list','listdaily','listreminders'], list_reminders_command))
+    application.add_handler(CommandHandler(['set','setdaily', 'setdailyreminder'], set_daily_reminder_command))
+    application.add_handler(CommandHandler(['stopdaily','stopdailyreminder'], stop_daily_reminder_command))
     application.add_handler(CommandHandler('remind', remind_command))
     application.add_handler(CommandHandler('remindme', remind_me_command))
+    application.add_handler(CommandHandler(['remindexamples','reminderexamples'], remind_examples_command))
+    application.add_handler(CommandHandler('removereminder', remove_reminder_command))
     application.add_handler(CommandHandler('start', start_command))
-    application.add_handler(CommandHandler('stop', stop_command))
+    application.add_handler(CommandHandler('stopall', stop_all_command))
     application.add_handler(CommandHandler('stopconfirm', stop_confirm_command))
-    application.add_handler(CommandHandler('update', update_data_command))
+    application.add_handler(CommandHandler('update', update_command))
     application.add_handler(MessageHandler(filters.Regex(re.compile(AWOO_PATTERN, re.I)), awoo_reply))
     application.add_handler(MessageHandler(filters.Regex(re.compile(BOT_NAME, re.I)), awoo_reply))
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), parse_all_messages))
