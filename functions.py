@@ -173,6 +173,7 @@ async def is_user_chat_admin(update: Update):
 
 def format_onetime_reminder(reminder):
     when = dict_to_date(reminder['when'])
-    d = when.strftime("%m/%d")
+    current_year = datetime.now().year
+    d = when.strftime("%m/%d") if when.year == current_year else when.strftime("%m/%d/%y") 
     t = when.strftime('%I:%M %p')
     return f"{d} @ {t} for {reminder['target']}: {reminder['subject']}"

@@ -13,11 +13,11 @@ I love awoopackbot!
 /list
 /stopdailyreminder 4:20
 /stopdailyreminder 4:20
-/listdailyreminders
+/list
 /setdailyreminder 29:59
 /setdailyreminder 1
 /removereminder
-/remmindme test in 1 minute
+/remindme test in 1 minute
 /remind me to take out the trash at 6pm
 /remind me to test the stuff on thursday
 /remind me about bushes baked beans on thursday at 23:59
@@ -34,6 +34,6 @@ I love awoopackbot!
 /removereminder #99
 /removereminder 00:01
 /removereminder 6pm #1
-/stop
+/stopall
 /stopconfirm
-/stop
+/stopall
