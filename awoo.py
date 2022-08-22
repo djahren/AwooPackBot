@@ -119,14 +119,16 @@ async def list_reminders_command(update: Update, context: ContextTypes.DEFAULT_T
         onetime_reminders = chats[chat_id][ONETIME]
         if daily_reminders:
             reminders_list_msg += "This chat has the following daily reminder messages set:\n"
+            dailies = []
             for re_key in daily_reminders: 
-                hours = int(re_key.split("_")[1])
-                minutes = int(re_key.split("_")[2])
-                reminders_list_msg += f"{hours:02d}:{minutes:02d}\n"
+                dailies.append({"h": int(re_key.split("_")[1]), "m": int(re_key.split("_")[2])})
+            for d in sorted(dailies, key=lambda t:t["h"]*60+t["m"]):
+                print(d)
+                reminders_list_msg += f"{d['h']:02d}:{d['m']:02d}\n"
         if onetime_reminders:
             if reminders_list_msg: reminders_list_msg += "\n"
             reminders_list_msg += "This chat has the following one-time reminders set:\n"
-            for re_key in onetime_reminders: 
+            for re_key in sorted(onetime_reminders, key=lambda r:dict_to_date(onetime_reminders[r]["when"])): 
                 reminder = onetime_reminders[re_key]
                 reminders_list_msg += format_onetime_reminder(reminder=reminder) + "\n"    
         if daily_reminders or onetime_reminders:
@@ -295,7 +297,7 @@ async def remove_reminder_command(update: Update, context: ContextTypes.DEFAULT_
     if not reminders:
         await context.bot.send_message(chat_id=chat_id, text=msg["err_no_reminders"])
         return
-    if not is_user_chat_admin(update=update):
+    if not await is_user_chat_admin(update=update):
         for key in reminders.copy():
             if not username in (reminders[key]["from"].lower(), reminders[key]["target"].lower()):
                 reminders.pop(key)
