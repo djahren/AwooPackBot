@@ -219,7 +219,7 @@ async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             greedy = False if index + 1 >= len(context.args) else parse_time(value + context.args[index+1])
             if cur_kw in["at","in"] and (t or greedy):
                 indicies[cur_kw]["finished"] = True
-                if greedy: 
+                if greedy and cur_kw == "at": 
                     t = greedy
                     skip_next = True
                     indicies[cur_kw]["to"] += 1
