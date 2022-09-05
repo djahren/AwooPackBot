@@ -123,7 +123,6 @@ async def list_reminders_command(update: Update, context: ContextTypes.DEFAULT_T
             for re_key in daily_reminders: 
                 dailies.append({"h": int(re_key.split("_")[1]), "m": int(re_key.split("_")[2])})
             for d in sorted(dailies, key=lambda t:t["h"]*60+t["m"]):
-                print(d)
                 reminders_list_msg += f"{d['h']:02d}:{d['m']:02d}\n"
         if onetime_reminders:
             if reminders_list_msg: reminders_list_msg += "\n"
@@ -358,6 +357,9 @@ async def remind_examples_command(update: Update, context: ContextTypes.DEFAULT_
     await context.bot.send_message(chat_id=update.effective_chat.id, text=msg["cmd_remind_examples"], parse_mode="markdown")
 
 async def update_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await is_user_chat_admin(update=update):
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=msg["err_admin_required"])
+        return
     global data
     data = get_data_from_google()
     await context.bot.send_message(chat_id=update.effective_chat.id, text=msg["cmd_update"])
@@ -372,6 +374,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def stop_all_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_message.chat_id
+    if not await is_user_chat_admin(update=update):
+        await context.bot.send_message(chat_id=chat_id, text=msg["err_admin_required"])
+        return
     if chat_id in chats: 
         set_stop_armed(chat_id=chat_id,armed=True)
         await context.bot.send_message(chat_id=chat_id, text=msg["cmd_stop"])
@@ -380,6 +385,9 @@ async def stop_all_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def stop_confirm_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_message.chat_id
+    if not await is_user_chat_admin(update=update):
+        await context.bot.send_message(chat_id=chat_id, text=msg["err_admin_required"])
+        return
     if chat_id in chats: 
         if chats[chat_id]["stop_armed"] == 1:
             for job_name in chats[chat_id][DAILY]:
