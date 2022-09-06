@@ -407,8 +407,9 @@ async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def parse_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     set_stop_armed(chat_id=update.effective_message.chat_id, armed=False)
-    message = update.message.text
     if update.effective_user.is_bot: return
+    if update.message:
+        message = update.message.text
 
 if __name__ == '__main__':
     data = get_data_from_google()
