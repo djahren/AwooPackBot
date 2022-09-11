@@ -43,14 +43,14 @@ def generate_message(data: dict):
     vars_to_replace = re.findall(r'\%[a-z_]+\%',the_message) #get all variables
     for index, current_var in enumerate(vars_to_replace): #loop through and replace each one
         key = str(current_var).replace('%','')
-        if key == 'greeting' and index != 0: 
-            selected_word = selected_word.lower()
-        elif key == 'tod':
+        if key == 'tod':
             selected_word = tod
         elif key == 'reminder': #set the reminder to the first reminder if it's morning, else pick at random
             selected_word = words[key][0] if tod == 'morning' else str(choice(words[key][1:])).strip()
         else:
             selected_word = str(choice(words[key])).strip() #select random word for each variable
+        if key == 'greeting' and index != 0: 
+            selected_word = selected_word.lower()
         the_message = the_message.replace(current_var, selected_word, 1)
 
     return the_message.replace('%tod%', tod) #return message and replace %tod% if it exists
