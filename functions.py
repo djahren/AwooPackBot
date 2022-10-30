@@ -89,7 +89,7 @@ def get_chats_from_file() -> dict:
 
 def parse_time(time_string:str) -> datetime:
     time_string = time_string.lower().strip()
-    now = datetime.now(tz=PACIFIC_TZ)
+    now = datetime.now(tz=PACIFIC_TZ).replace(microsecond=0)
     match_in = re.search(TIME_PATTERN_IN, time_string)
     match_12 = re.search(TIME_PATTERN_12H, time_string)
     match_24 = re.search(TIME_PATTERN_24H, time_string)
@@ -128,7 +128,7 @@ def parse_time(time_string:str) -> datetime:
 
 def parse_date(date_string:str) -> datetime:
     date_string = date_string.lower()
-    now = datetime.now()
+    now = datetime.now(PACIFIC_TZ).replace(microsecond=0)
     date_match_intl = re.search(DATE_PATTERN_INTL, date_string)
     date_match_us = re.search(DATE_PATTERN_US, date_string)
     if date_string.endswith("day"):
