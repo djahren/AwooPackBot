@@ -1,6 +1,5 @@
 import logging
 import re
-import sys
 from datetime import time, timedelta
 from random import choice
 
@@ -8,6 +7,7 @@ from telegram import Chat, Update
 from telegram.ext import (ApplicationBuilder, CommandHandler, ContextTypes,
                           MessageHandler, filters)
 
+import models as db
 from constants import *
 from functions import *
 
@@ -19,17 +19,16 @@ logging.basicConfig(
 data = {}
 chats = {}
 msg = get_system_messages()
+session = db.Session()
 
-def register_daily_reminder(context: ContextTypes.DEFAULT_TYPE, chat_id, hours, minutes = 0):
-    first_occurance = time(hour=hours, minute=minutes, tzinfo=PACIFIC_TZ)
-    job_name = get_recurring_job_name(chat_id, hours, minutes)
-    return context.job_queue.run_repeating(send_daily_reminder_job, interval=timedelta(days=1), 
-        first=first_occurance, chat_id=chat_id, name=job_name)
-
-def register_onetime_reminder(context: ContextTypes.DEFAULT_TYPE, chat_id:int, reminder:dict):
-    job_name = get_onetime_job_name(chat_id=chat_id, reminder=reminder)
-    return context.job_queue.run_once(callback=send_onetime_reminder_job, when=dict_to_date(reminder['when']), 
-        chat_id=chat_id, name=job_name, data=reminder)
+def register_reminder(context:ContextTypes.DEFAULT_TYPE, chat_id:int, reminder:db.Reminder):
+    if reminder.is_daily:
+        first_occurance = time(hour=reminder.when.hour, minute=reminder.when.minute, tzinfo=PACIFIC_TZ)
+        return context.job_queue.run_repeating(send_daily_reminder_job, interval=timedelta(days=1), 
+            first=first_occurance, chat_id=chat_id, name=reminder.name, data=reminder)
+    else:
+        return context.job_queue.run_once(callback=send_onetime_reminder_job, when=reminder.when.astimezone(tz=PACIFIC_TZ), 
+            chat_id=chat_id, name=reminder.name, data=reminder)
 
 def remove_scheduled_job(context: ContextTypes.DEFAULT_TYPE, job_name: str):
     current_jobs = context.job_queue.get_jobs_by_name(job_name)
@@ -38,48 +37,43 @@ def remove_scheduled_job(context: ContextTypes.DEFAULT_TYPE, job_name: str):
         logging.info(f"Removing job: {job_name}")
 
 def add_chat_if_not_exist(chat: Chat):
-    if not chat.id in chats:
+    the_chat:db.Chat = session.query(db.Chat).filter(db.Chat.id == chat.id).first()
+    if not the_chat:
         title = chat.title if chat.title else f"{chat.first_name} {chat.last_name}"
-        chats[chat.id] = {
-            "title": title,
-            DAILY: [],
-            ONETIME: {},
-            "time_zone": "America/Los_Angeles",
-            "stop_armed": 0
-        }
-        save_chats_to_file(chats)
+        the_chat = db.Chat(
+            chat_id=chat.id, 
+            title=title,
+            time_zone="America/Los_Angeles"
+        )
+        session.add(the_chat)
+        session.commit()
 
 def set_stop_armed(chat_id, armed):
-    global chats
-    if chat_id in chats: 
-        chats[chat_id]["stop_armed"] = 1 if armed else 0
+    chat:db.Chat = session.query(db.Chat).filter(db.Chat.id == chat_id).first()
+    if chat: 
+        chat.stop_armed = armed
+        session.commit()
         return True
     else: return False
 
 def load_chats(application):
-    global chats
-    chats = get_chats_from_file()
-    for chat_id in chats: #load reminders
-        logging.info(chat_id)
-        set_stop_armed(chat_id=chat_id, armed=False)
-        context = ContextTypes.DEFAULT_TYPE(application=application, chat_id=chat_id)
-        for daily_id in chats[chat_id][DAILY]:
-            register_daily_reminder(context=context, chat_id=chat_id, 
-                hours=int(daily_id.split("_")[1]), minutes=int(daily_id.split("_")[2]))
-        purge_past_reminders(chat_id)
-        for onetime_id in chats[chat_id][ONETIME]:
-            register_onetime_reminder(context=context, chat_id=chat_id, reminder=chats[chat_id][ONETIME][onetime_id])
+    chats:list[db.Chat] = session.query(db.Chat).all()
+    for chat in chats: #load reminders
+        logging.info(repr(chat))
+        set_stop_armed(chat_id=chat.id, armed=False)
+        context = ContextTypes.DEFAULT_TYPE(application=application, chat_id=chat.id)
+        purge_past_reminders(chat.id)
+        for reminder in chat.reminders:
+            register_reminder(context=context, chat_id=chat.id, reminder=reminder)
 
 def purge_past_reminders(chat_id:int):
-    if not chat_id in chats: return
+    chat:db.Chat = session.query(db.Chat).filter(db.Chat.id == chat_id).first()
+    if not chat: return
     now = datetime.now(tz=PACIFIC_TZ)
-    keys = dict(chats[chat_id][ONETIME]).copy().keys()
-    for r_key in keys:
-        reminder = chats[chat_id][ONETIME][r_key]
-        r_time = dict_to_date(reminder['when'])
-        if r_time < now:
-            chats[chat_id][ONETIME].pop(r_key)
-    save_chats_to_file(chats=chats)
+    for reminder in chat.onetime_reminders:
+        if reminder.when.astimezone(tz=PACIFIC_TZ) < now:
+            session.delete(reminder)
+    session.commit()
 
 async def send_daily_reminder_job(context: ContextTypes.DEFAULT_TYPE) -> None: #called by scheduled job
     job = context.job
@@ -90,15 +84,15 @@ async def send_daily_reminder_job(context: ContextTypes.DEFAULT_TYPE) -> None: #
 async def send_onetime_reminder_job(context: ContextTypes.DEFAULT_TYPE) -> None: #called by scheduled job
     job = context.job
     try:
-        reminder = chats[job.chat_id][ONETIME][job.name]
-        from_user = reminder['from'] if reminder['from'] != reminder['target'] else "You"
-        message = f"{choice(data['words']['greeting']).replace('%tod%',get_time_of_day())} @{reminder['target']}! {from_user} asked me to remind you {reminder['subject']}."
+        reminder:db.Reminder = job.data
+        from_user = reminder.from_user if reminder.from_user != reminder.target_user else "You"
+        message = f"{choice(data['words']['greeting']).replace('%tod%',get_time_of_day())} @{reminder.target_user}! {from_user} asked me to remind you {reminder.subject}."
         await context.bot.send_message(chat_id=job.chat_id, text=message)
     except Exception as e:
         logging.info(f"Failed sending job: {job.name} at {get_current_time_string()} with the following error: {str(e)}")
     finally:
-        chats[job.chat_id][ONETIME].pop(job.name)
-        save_chats_to_file(chats)
+        session.delete(reminder)
+        session.commit()
 
 async def awoo_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.is_bot: return
@@ -112,25 +106,20 @@ async def get_message_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def list_reminders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
+    chat:db.Chat = session.query(db.Chat).filter(db.Chat.id == chat_id).first()
     purge_past_reminders(chat_id)
-    if chat_id in chats:
+    if chat:
         reminders_list_msg = ""
-        daily_reminders = chats[chat_id][DAILY]
-        onetime_reminders = chats[chat_id][ONETIME]
-        if daily_reminders:
+        if chat.daily_reminders:
             reminders_list_msg += "This chat has the following daily reminder messages set:\n"
-            dailies = []
-            for re_key in daily_reminders: 
-                dailies.append({"h": int(re_key.split("_")[1]), "m": int(re_key.split("_")[2])})
-            for d in sorted(dailies, key=lambda t:t["h"]*60+t["m"]):
-                reminders_list_msg += f"{d['h']:02d}:{d['m']:02d}\n"
-        if onetime_reminders:
+            for reminder in sorted(chat.daily_reminders): 
+                reminders_list_msg += reminder.format_string() + "\n"
+        if chat.onetime_reminders:
             if reminders_list_msg: reminders_list_msg += "\n"
             reminders_list_msg += "This chat has the following one-time reminders set:\n"
-            for re_key in sorted(onetime_reminders, key=lambda r:dict_to_date(onetime_reminders[r]["when"])): 
-                reminder = onetime_reminders[re_key]
-                reminders_list_msg += format_onetime_reminder(reminder=reminder) + "\n"    
-        if daily_reminders or onetime_reminders:
+            for reminder in sorted(chat.onetime_reminders): 
+                reminders_list_msg += reminder.format_string() + "\n"    
+        if chat.reminders:
             await context.bot.send_message(chat_id=chat_id, text=reminders_list_msg)       
             return
     await context.bot.send_message(chat_id=chat_id, text=msg["err_no_reminders"])         
@@ -141,16 +130,21 @@ async def set_daily_reminder_command(update: Update, context: ContextTypes.DEFAU
         await context.bot.send_message(chat_id=chat_id, text=msg["err_admin_required"])
         return
     if context.args:
-        matches = parse_time(time_string=' '.join(context.args))
-        if matches:
-            hours,minutes = (matches.hour, matches.minute)
+        parsed_time = parse_time(time_string=' '.join(context.args))
+        if parsed_time:
             add_chat_if_not_exist(update.effective_chat)
-            job_name = get_recurring_job_name(chat_id, hours, minutes)
-            if not job_name in chats[chat_id][DAILY]:
-                job = register_daily_reminder(context=context, chat_id=chat_id, hours=hours, minutes=minutes)
+            reminder = db.Reminder(
+                chat_id=chat_id,
+                when=parsed_time,
+                from_user=update.effective_user.username
+            )
+            job_exists_db = session.query(db.Reminder).filter(db.Reminder.name == reminder.name).first()
+            job_exists_queue = context.job_queue.get_jobs_by_name(reminder.name)
+            if not job_exists_db and not job_exists_queue:
+                job = register_reminder(context=context, chat_id=chat_id, reminder=reminder)
                 if job: 
-                    chats[chat_id][DAILY].append(job_name)
-                    save_chats_to_file(chats)
+                    session.add(reminder)
+                    session.commit()
                     await context.bot.send_message(chat_id=chat_id, text=msg["cmd_set_daily_succcess"])
                 else:
                     await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_schedule_jobs"])
@@ -165,19 +159,23 @@ async def stop_daily_reminder_command(update: Update, context: ContextTypes.DEFA
         await context.bot.send_message(chat_id=chat_id, text=msg["err_admin_required"])
         return
     if context.args:
-        matches = parse_time(time_string=' '.join(context.args))
-        if matches:
-            hours,minutes = (matches.hour,matches.minute)
-            job_name = get_recurring_job_name(chat_id, hours=hours, minutes=minutes)
-            current_jobs = context.job_queue.get_jobs_by_name(job_name)
-            if current_jobs:
-                job = current_jobs[0]
+        parsed_time = parse_time(time_string=' '.join(context.args))
+        if parsed_time:
+            reminder = db.Reminder(
+                chat_id=chat_id,
+                when=parsed_time,
+                from_user=update.effective_user.username
+            )
+            job_exists_queue = context.job_queue.get_jobs_by_name(reminder.name)
+            job_exists_db = session.query(db.Reminder).filter(db.Reminder.name == reminder.name).first()
+            if job_exists_queue:
+                job = job_exists_queue[0]
                 job.schedule_removal()
-                logging.info(f"Removing job: {job_name}")
+                logging.info(f"Removing job: {reminder.name}")
                 await context.bot.send_message(chat_id=chat_id, text=msg["cmd_stop_daily_success"])
-                if job_name in chats[chat_id][DAILY]:
-                    chats[chat_id][DAILY].remove(job_name)
-                    save_chats_to_file(chats)
+                if job_exists_db:
+                    session.delete(job_exists_db)
+                    session.commit()
             else:
                 await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_find_reminder"])
             return
@@ -188,125 +186,61 @@ async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) < 4:
         await context.bot.send_message(chat_id=chat_id, text=msg["err_reminder_need_at"])
         return
-    reminder = {
-        "from": update.effective_user.username,
-        "target": context.args[0],
-        "subject": "",
-        "when": {}
-    }
-    indicies = {}
-    now = datetime.now(tz=PACIFIC_TZ)
-    when = now 
-    keywords = {"at": 2,"in": 2,"on": 1,"tomorrow": 0}
-    skip_next = False
-    for index,word in enumerate([a.lower() for a in context.args]):
-        #get ranges for each part of the sentence structure
-        if skip_next:
-            skip_next = False
-            continue
-        if word in keywords:
-            cur_kw = word
-            if not word in indicies:
-                indicies[word] = {"index": index, "from": -1, "to": -1, "value": "", "finished": False}
-        elif indicies and cur_kw in indicies:
-            if indicies[cur_kw]["finished"]: continue
+    
+    now = datetime.now(tz=PACIFIC_TZ).replace(microsecond=0)
+    reminder = parse_reminder(chat_id=chat_id,from_user=update.effective_user.username, args=context.args)
 
-            if indicies[cur_kw]["from"] == -1: indicies[cur_kw]["from"] = index
-            indicies[cur_kw]["to"] = index + 1
-            words = context.args[indicies[cur_kw]["from"]:indicies[cur_kw]["to"]]
-            value = " ".join(words)
-            indicies[cur_kw]["value"] = value
-            d,t = (parse_date(value), parse_time(value))
-            greedy = False if index + 1 >= len(context.args) else parse_time(value + context.args[index+1])
-            if cur_kw in["at","in"] and (t or greedy):
-                indicies[cur_kw]["finished"] = True
-                if greedy and cur_kw == "at": 
-                    t = greedy
-                    skip_next = True
-                    indicies[cur_kw]["to"] += 1
-                if t.date() != now.date() and when.date() == now.date(): 
-                    #if parse_time modifies date, and the date hasn't been modified elsewhere
-                    when = t
-                else:
-                    when = when.replace(hour=t.hour, minute=t.minute, second=t.second)
-            elif cur_kw == "on" and d:
-                indicies[cur_kw]["finished"] = True
-                when = when.replace(year=d.year,  month=d.month, day=d.day)
-            elif cur_kw == "tomorrow":
-                indicies[cur_kw]["finished"] = True
-                when += timedelta(days=1)
-            elif cur_kw == "in" and len(words) < 2:
-                pass
-            else: #couldn't parse kw, likely used in subject
-                indicies.pop(cur_kw)
-
-    logging.info(indicies)
-
-    if not "at" in indicies and not "in" in indicies:
+    if not reminder:
         await context.bot.send_message(chat_id=chat_id, text=msg["err_reminder_need_at"])
         return
-    
-    if reminder["target"].lower() == "me": reminder["target"] = reminder['from']
-    else: reminder["target"] = reminder["target"].lstrip("@")
-
-    subject_words = context.args.copy()
-    for key in indicies:
-        i = indicies[key]
-        if i["from"] == -1: i["to"] = i["index"] + 1
-        elif i["to"] == -1: i["to"] = i["from"] + 1
-        for j in range(i["index"],i["to"]):
-            subject_words[j] = ""
-    reminder["subject"] = " ".join([w for w in subject_words[1:] if w != ""])
-    reminder["when"] = date_to_dict(when)
-    
-    logging.info(reminder)
-
-    if not reminder["subject"]:
+    if not reminder.subject:
         await context.bot.send_message(chat_id=chat_id, text=msg["err_reminder_no_subject"])
         return
-    elif when < now:
+    elif reminder.when < now:
         await context.bot.send_message(chat_id=chat_id, text=msg["err_reminder_in_past"])
         return
-    elif when > now + timedelta(days=365):
+    elif reminder.when > now + timedelta(days=365):
         await context.bot.send_message(chat_id=chat_id, text=msg["err_reminder_too_far_out"])
         return
-    elif when - now < timedelta(minutes=1):
+    elif reminder.when - now < timedelta(minutes=1):
         await context.bot.send_message(chat_id=chat_id, text=msg["err_reminder_too_close"])
         return
 
     add_chat_if_not_exist(update.effective_chat)
-    job_name = get_onetime_job_name(chat_id=chat_id, reminder=reminder)
-    if not job_name in chats[chat_id][ONETIME]:
-        job = register_onetime_reminder(context=context, chat_id=chat_id, reminder=reminder)
+    job_exists = session.query(db.Reminder).filter(db.Reminder.name == reminder.name).first()
+    if not job_exists:
+        job = register_reminder(context=context, chat_id=chat_id, reminder=reminder)
         if job: 
-            chats[chat_id][ONETIME][job_name] = reminder
-            save_chats_to_file(chats)
+            session.add(reminder)
+            session.commit()
             await context.bot.send_message(chat_id=chat_id, 
-                text=f"I've set your reminder!\n{format_onetime_reminder(reminder)}\n{msg['cmd_reminder_list']}")
+                text=f"I've set your reminder!\n{reminder.format_string()}\n{msg['cmd_reminder_list']}")
         else:
             await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_schedule_jobs"])
     else:
         await context.bot.send_message(chat_id=chat_id, text=msg["err_already_exists"])
 
+#[ ] remove_reminder_command
 async def remove_reminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
+    chat:db.Chat = session.query(db.Chat).filter(db.Chat.id == chat_id).first()
     username = update.effective_user.username.lower()
-    reminders = dict(chats[chat_id][ONETIME])
     delete_arg_index,delete_reminder_num = (-1,-1)
-    if not reminders:
+    reminders_to_show:list[db.Reminder] = []
+    user_is_admin = await is_user_chat_admin(update=update)
+    num_possible_matched_reminders = 0
+    if not chat:
+        await context.bot.send_message(chat_id=chat_id, text=msg["err_chat_not_in_db"])
+        return
+    if not chat.reminders:
         await context.bot.send_message(chat_id=chat_id, text=msg["err_no_reminders"])
         return
-    if not await is_user_chat_admin(update=update):
-        for key in reminders.copy():
-            if not username in (reminders[key]["from"].lower(), reminders[key]["target"].lower()):
-                reminders.pop(key)
-        if not reminders:
-            await context.bot.send_message(chat_id=chat_id, text=msg["err_remove_permissions"])
-            return
     if context.args:
         for index,arg in enumerate(context.args):
             if arg.startswith("#"): delete_arg_index = index
-        if delete_arg_index != -1:
+        if delete_arg_index == -1:
+            time_args = context.args
+        else:
             time_args = context.args[0:delete_arg_index]
             if len(context.args[delete_arg_index]) > 1:
                 try: delete_reminder_num = int(context.args[delete_arg_index].lstrip("#"))
@@ -317,37 +251,42 @@ async def remove_reminder_command(update: Update, context: ContextTypes.DEFAULT_
             if delete_reminder_num == -1:
                 await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_remove_reminder"])
                 return
-        else:
-            time_args = context.args
         t = parse_time(" ".join(time_args))
-        if t:
-            for key in reminders.copy():
-                if not (reminders[key]["when"]["hour"] == t.hour and reminders[key]["when"]["minute"] == t.minute):
-                    reminders.pop(key)
-        elif delete_arg_index == -1:
+        if not t and delete_arg_index == -1:
             await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_parse_time"])
             return
-    if reminders:
+
+    for reminder in chat.onetime_reminders:
+        if not context.args or (delete_arg_index != -1 and not t) or (t and reminder.when.hour == t.hour and reminder.when.minute == t.minute):
+            num_possible_matched_reminders += 1
+            if username == reminder.from_user.lower() or username == reminder.target_user.lower() or user_is_admin:
+                reminders_to_show.append(reminder)
+    
+    if not reminders_to_show and num_possible_matched_reminders == 0 and not user_is_admin:
+        await context.bot.send_message(chat_id=chat_id, text=msg["err_remove_permissions"])
+        return
+
+    if reminders_to_show or (user_is_admin and chat.daily_reminders):
         reminders_msg = f"You have access to remove the following reminders{' that match your search' if context.args else ''}:\n"
-        r_sorted = sorted(reminders, key = lambda r: dict_to_date(reminders[r]["when"]).time())
         args = ' '.join(context.args)
-        for i,key in enumerate(r_sorted):
+        for i,reminder in enumerate(sorted(reminders_to_show)):
             n = i+1
-            reminder_str = f"#{n}: " + format_onetime_reminder(reminders[key])
+            reminder_str = f"#{n}: " + reminder.format_string()
             delete_str   = f"``` /removereminder {(args + ' ') if args else ''}#{n}```" 
             reminders_msg += reminder_str + delete_str
-            if delete_reminder_num != -1 and n == delete_reminder_num: 
-                remove_scheduled_job(context=context, job_name=key)
-                chats[chat_id][ONETIME].pop(key)
-                save_chats_to_file(chats)
+            if n == delete_reminder_num and delete_reminder_num != -1: 
+                remove_scheduled_job(context=context, job_name=reminder.name)
+                session.delete(reminder)
+                session.commit()
                 await context.bot.send_message(chat_id=chat_id, text=f"Removing reminder {reminder_str}")
                 return
         if delete_reminder_num == -1:
             await context.bot.send_message(chat_id=chat_id, text=reminders_msg, parse_mode="markdown")
+            return
         else:
-            await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_remove_reminder"])    
-    else:
-        await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_find_reminder"])
+            await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_remove_reminder"])
+            return 
+    await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_find_reminder"])
 
 async def remind_me_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.args.insert(0,"me")
@@ -377,7 +316,8 @@ async def stop_all_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await is_user_chat_admin(update=update):
         await context.bot.send_message(chat_id=chat_id, text=msg["err_admin_required"])
         return
-    if chat_id in chats: 
+    chat:db.Chat = session.query(db.Chat).filter(db.Chat.id == chat_id).first()
+    if chat: 
         set_stop_armed(chat_id=chat_id,armed=True)
         await context.bot.send_message(chat_id=chat_id, text=msg["cmd_stop"])
     else:
@@ -388,14 +328,11 @@ async def stop_confirm_command(update: Update, context: ContextTypes.DEFAULT_TYP
     if not await is_user_chat_admin(update=update):
         await context.bot.send_message(chat_id=chat_id, text=msg["err_admin_required"])
         return
-    if chat_id in chats: 
-        if chats[chat_id]["stop_armed"] == 1:
-            for job_name in chats[chat_id][DAILY]:
-                remove_scheduled_job(context=context, job_name=job_name)
-            for job_name in chats[chat_id][ONETIME]:
-                remove_scheduled_job(context=context, job_name=job_name)
-            chats.pop(chat_id)
-            save_chats_to_file(chats)
+    chat:db.Chat = session.query(db.Chat).filter(db.Chat.id == chat_id).first()
+    if chat: 
+        if chat.stop_armed:
+            session.delete(chat)
+            session.commit()
             await context.bot.send_message(chat_id=chat_id, text=msg["cmd_stop_confirm"])
         else: 
             await context.bot.send_message(chat_id=chat_id, text=msg["err_stop_not_armed"])
@@ -413,15 +350,11 @@ async def parse_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 if __name__ == '__main__':
     data = get_data_from_google()
-    #open token.txt
-    token = ""
-    with open("token.txt", "r") as tkfile:
-        token = tkfile.read().strip()
-    if token == "":
-        sys.exit("Create a file called token.txt and add your bot token to it.")
-    
+    db.init_db()
+    token = get_token()
     application = ApplicationBuilder().token(token).build()
     load_chats(application)
+
     application.add_handler(CommandHandler('help', help_command))
     application.add_handler(CommandHandler('getmessage', get_message_command))
     application.add_handler(CommandHandler(['list','listdaily','listreminders'], list_reminders_command))
