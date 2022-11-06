@@ -1,4 +1,4 @@
-#helper funtions
+# helper funtions
 import json
 import re
 import sys
@@ -33,64 +33,64 @@ def get_data_from_google() -> dict:
         data["words"][key] = new_words
     return data
 
-def  get_time_of_day() -> str:
+
+def get_time_of_day() -> str:
     now = datetime.now(PACIFIC_TZ)
-    if now.hour < 12:   return "morning" 
-    elif now.hour < 18: return "afternoon"
-    else:               return "evening"
+    if now.hour < 12:
+        return "morning"
+    elif now.hour < 18:
+        return "afternoon"
+    else:
+        return "evening"
+
 
 def generate_message(data: dict):
     words = data["words"]
-    the_message = str(choice(data["formats"])) #pick a format
+    the_message = str(choice(data["formats"]))
     tod = get_time_of_day()
-    vars_to_replace = re.findall(r'\%[a-z_]+\%',the_message) #get all variables
-    for index, current_var in enumerate(vars_to_replace): #loop through and replace each one
-        key = str(current_var).replace('%','')
+    vars_to_replace = re.findall(r'\%[a-z_]+\%', the_message)
+    for index, current_var in enumerate(vars_to_replace):
+        key = str(current_var).replace('%', '')
         if key == 'tod':
             selected_word = tod
-        elif key == 'reminder': #set the reminder to the first reminder if it's morning, else pick at random
+        elif key == 'reminder':
             selected_word = words[key][0] if tod == 'morning' else str(choice(words[key][1:])).strip()
         else:
-            selected_word = str(choice(words[key])).strip() #select random word for each variable
+            selected_word = str(choice(words[key])).strip()
         if key == 'greeting' and index != 0: 
             selected_word = selected_word.lower()
         the_message = the_message.replace(current_var, selected_word, 1)
 
-    return the_message.replace('%tod%', tod) #return message and replace %tod% if it exists
+    return the_message.replace('%tod%', tod)
 
-def get_recurring_job_name(chat_id:int, hours:int, minutes:int) -> str:
-    return f"{chat_id}_{hours}_{minutes}"
-
-def get_onetime_job_name(chat_id:int, reminder:dict)->str:
-    return f"{chat_id}_{reminder['from']}_{reminder['when']['month']}_{reminder['when']['day']}_{reminder['when']['hour']}_{reminder['when']['minute']}"
 
 def get_current_time_string() -> str:
     return datetime.now(PACIFIC_TZ).strftime("%H:%M:%S")
+
 
 def get_system_messages() -> dict:
     with open(MESSAGES_FILE_PATH, "r") as msg_file:
         return json.load(msg_file)
 
-def save_chats_to_file(chats: dict):
-    with open(CHATS_FILE_PATH, "w") as chat_file:
-        chat_file.write(json.dumps(chats, indent=4))
-    
+
 def get_chats_from_file() -> dict:
     try:
         with open(CHATS_FILE_PATH, "r") as chat_file:
             chats = json.load(chat_file)
-    except:
+    except Exception:
         chats = {}
     
     new_chats = {}
-    for chat_id in chats: #convert all chat_id dictionary keys saved as strings to numbers.
+    for chat_id in chats:
+        # convert all chat_id dictionary keys saved as strings to numbers.
         if isinstance(chat_id, str) and chat_id.lstrip('-').isnumeric():
             new_chats[int(chat_id)] = chats[chat_id]
         else:
             new_chats[chat_id] = chats[chat_id]
     return new_chats
 
-def parse_time(time_string:str) -> datetime:
+
+def parse_time(time_string: str) -> datetime:
     time_string = time_string.lower().strip()
     now = datetime.now(tz=PACIFIC_TZ).replace(microsecond=0)
     match_in = re.search(TIME_PATTERN_IN, time_string)
@@ -107,12 +107,17 @@ def parse_time(time_string:str) -> datetime:
         am = False
     elif match_in:
         how_many = int(match_in[1])
-        if how_many < 1: return False
+        if how_many < 1:
+            return False
         units = match_in[2]
-        if units.startswith("min"): now += timedelta(minutes=how_many)
-        elif units.startswith("hour"): now += timedelta(hours=how_many)
-        elif units.startswith("day"): now += timedelta(days=how_many)
-        elif units.startswith("week"): now += timedelta(days=how_many*7)
+        if units.startswith("min"):
+            now += timedelta(minutes=how_many)
+        elif units.startswith("hour"):
+            now += timedelta(hours=how_many)
+        elif units.startswith("day"):
+            now += timedelta(days=how_many)
+        elif units.startswith("week"):
+            now += timedelta(days=how_many*7)
         return now
     elif match_12: 
         hours = int(match_12[1])
@@ -128,6 +133,7 @@ def parse_time(time_string:str) -> datetime:
     if hours > 23 or minutes > 59: return False
     add_days = 1 if (hours * 60 + minutes) < (now.hour * 60 + now.minute) else 0
     return now.replace(hour=hours, minute=minutes, second=seconds) + timedelta(days=add_days)
+
 
 def parse_date(date_string:str) -> datetime:
     date_string = date_string.lower()
@@ -151,22 +157,13 @@ def parse_date(date_string:str) -> datetime:
         d = int(date_match_us[2])
         try: 
             y = int(date_match_us[3])
-        except: 
+        except Exception: 
             y = now.year
             if now.replace(month=m, day=d) < now:
                 y += 1
     try: return now.replace(year=y, month=m, day=d)
-    except: return False 
+    except Exception: return False 
 
-def date_to_dict(datetime_object:datetime) -> dict:
-    return {
-        "year": datetime_object.year, "month": datetime_object.month, "day": datetime_object.day,
-        "hour": datetime_object.hour, "minute": datetime_object.minute, "second": datetime_object.second,
-    }
-
-def dict_to_date(dict_object:dict) -> datetime:
-    return datetime(year=dict_object["year"], month=dict_object["month"], day=dict_object["day"],
-        hour=dict_object["hour"], minute=dict_object["minute"], second=dict_object["second"], tzinfo=PACIFIC_TZ)
 
 async def is_user_chat_admin(update: Update):
     if update.effective_chat.id >= 0: return True #private
@@ -175,11 +172,13 @@ async def is_user_chat_admin(update: Update):
         if admin.user.id == update.effective_user.id: return True
     return False
 
+
 def get_token():
     with open("token.txt", "r") as tkfile:
         token = tkfile.read().strip()
     if token: return token
     else: sys.exit("Create a file called token.txt and add your bot token to it.")
+
 
 def parse_reminder(chat_id:int, from_user:str, args:tuple[str]) -> db.Reminder:
     now = datetime.now(tz=PACIFIC_TZ).replace(microsecond=0)
@@ -253,4 +252,3 @@ def parse_reminder(chat_id:int, from_user:str, args:tuple[str]) -> db.Reminder:
     reminder.when = when
     reminder.update_job_name()
     return reminder
-    

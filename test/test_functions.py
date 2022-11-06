@@ -1,12 +1,16 @@
-import os, sys
+import os
+import sys
+
 currentdir = os.path.dirname(os.path.realpath(__file__))
 parentdir = os.path.dirname(currentdir)
 sys.path.append(parentdir)
 
-from functions import parse_date, parse_time, parse_reminder
-from constants import *
 from datetime import datetime, timedelta
+
 import models as db
+from constants import PACIFIC_TZ
+from functions import parse_date, parse_reminder, parse_time
+
 
 class TestParseTime:
     now = datetime.now(PACIFIC_TZ).replace(microsecond=0)
@@ -37,7 +41,6 @@ class TestParseTime:
     def test_in_invalid(self):
         assert parse_time("in 24 hrs") == False
 
-    
     def test_12h_midnight(self):
         assert parse_time("12a") == self.midnight
 
@@ -49,7 +52,6 @@ class TestParseTime:
     
     def test_12h_noon_two(self):
         assert parse_time("12:00 P.M.") == self.noon
-    
     
     def test_24h_midnight_one(self):
         assert parse_time("0000") == self.midnight
@@ -79,6 +81,7 @@ class TestParseTime:
     def test_invalid_extra(self):
         assert parse_time("4:20 on") == False
 
+
 class TestParseDate:
     now = datetime.now(PACIFIC_TZ).replace(microsecond=0)
 
@@ -92,17 +95,18 @@ class TestParseDate:
         assert parse_date("monday") == self.now + timedelta(days=days)
 
     def test_intl_date(self):
-        assert parse_date("2021-01-06") == self.now.replace(year=2021,month=1,day=6)
+        assert parse_date("2021-01-06") == self.now.replace(year=2021, month=1, day=6)
     
     def test_us_date_full(self): 
-        assert parse_date("12/31/1999") == self.now.replace(year=1999,month=12,day=31)
+        assert parse_date("12/31/1999") == self.now.replace(year=1999, month=12, day=31)
 
     def test_us_date_partial(self):
-        assert parse_date("12/31") == self.now.replace(month=12,day=31)
+        assert parse_date("12/31") == self.now.replace(month=12, day=31)
 
     def test_date_next_year(self): 
         when = self.now - timedelta(days=1)
         assert parse_date(when.strftime("%m/%d")) == when.replace(year=when.year + 1)
+
 
 class TestParseReminder:
     chat_id = 1234
