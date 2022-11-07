@@ -48,7 +48,7 @@ class Reminder(Base):
 
     def get_job_name(self):
         rt: datetime = self.when
-        if self.is_daily: 
+        if self.is_daily:
             return f"{self.chat_id}_{rt.hour}_{rt.minute}"
         else:
             return f"{self.chat_id}_{self.from_user}_{rt.month}_{rt.day}_{rt.hour}_{rt.minute}"
@@ -72,13 +72,13 @@ class Reminder(Base):
 
     def __repr__(self):
         if self.is_daily:
-            more = f"is_daily={self.is_daily}" 
+            more = f"is_daily={self.is_daily}"
         else:
             more = f"target={self.target_user}, subject={self.subject}"
         return f"Reminder({self.name}, {more})"
 
     def __lt__(self, other):
-        if self.is_daily: 
+        if self.is_daily:
             return self.when.hour * 60 + self.when.minute < other.when.hour * 60 + other.when.minute
         else:
             return self.when < other.when
@@ -100,12 +100,12 @@ class Chat(Base):
     )
     daily_reminders: list[Reminder] = relationship(
         "Reminder",
-        primaryjoin=and_(id == Reminder.chat_id, Reminder.is_daily == True),
+        primaryjoin=and_(id == Reminder.chat_id, Reminder.is_daily == True),  # noqa: E712
         viewonly=True,
     )
     onetime_reminders: list[Reminder] = relationship(
         "Reminder",
-        primaryjoin=and_(id == Reminder.chat_id, Reminder.is_daily == False),
+        primaryjoin=and_(id == Reminder.chat_id, Reminder.is_daily == False),  # noqa: E712
         viewonly=True,
     )
 

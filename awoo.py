@@ -73,7 +73,8 @@ def set_stop_armed(chat_id, armed):
         chat.stop_armed = armed
         session.commit()
         return True
-    else: return False
+    else:
+        return False
 
 
 def load_chats(application):
@@ -89,7 +90,8 @@ def load_chats(application):
 
 def purge_past_reminders(chat_id: int):
     chat: db.Chat = session.query(db.Chat).filter(db.Chat.id == chat_id).first()
-    if not chat: return
+    if not chat:
+        return
     now = datetime.now(tz=PACIFIC_TZ)
     for reminder in chat.onetime_reminders:
         if reminder.when.astimezone(tz=PACIFIC_TZ) < now:
@@ -308,7 +310,9 @@ async def remove_reminder_command(update: Update, context: ContextTypes.DEFAULT_
             return
 
     for reminder in chat.onetime_reminders:
-        if not context.args or (delete_arg_index != -1 and not t) or (t and reminder.when.hour == t.hour and reminder.when.minute == t.minute):
+        time_match = t and reminder.when.hour == t.hour and reminder.when.minute == t.minute
+        delete_but_not_time_is_set = delete_arg_index != -1 and not t
+        if not context.args or delete_but_not_time_is_set or time_match:
             num_possible_matched_reminders += 1
             if username == reminder.from_user.lower() or username == reminder.target_user.lower() or user_is_admin:
                 reminders_to_show.append(reminder)
@@ -322,7 +326,7 @@ async def remove_reminder_command(update: Update, context: ContextTypes.DEFAULT_
 reminders{' that match your search' if context.args else ''}:\n"""
         args = ' '.join(context.args)
         for i, reminder in enumerate(sorted(reminders_to_show)):
-            n = i+1
+            n = i + 1
             reminder_str = f"#{n}: " + reminder.format_string()
             delete_str = f"``` /removereminder {(args + ' ') if args else ''}#{n}```"
             reminders_msg += reminder_str + delete_str
@@ -405,7 +409,8 @@ async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def parse_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     set_stop_armed(chat_id=update.effective_message.chat_id, armed=False)
-    if update.effective_user.is_bot: return
+    if update.effective_user.is_bot:
+        return
 
 
 if __name__ == '__main__':
