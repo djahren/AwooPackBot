@@ -105,7 +105,7 @@ async def send_daily_reminder_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     job = context.job
     message = generate_message(data)
     logging.info(f"Sending message via job: {message} at {get_current_time_string()}")
-    await context.bot.send_message(chat_id=job.chat_id, text=message)
+    return await context.bot.send_message(chat_id=job.chat_id, text=message)
 
 
 async def send_onetime_reminder_job(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -116,7 +116,7 @@ async def send_onetime_reminder_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         from_user = reminder.from_user if reminder.from_user != reminder.target_user else "You"
         message = f"""{choice(data['words']['greeting']).replace('%tod%',get_time_of_day())}
  @{reminder.target_user}! {from_user} asked me to remind you {reminder.subject}."""
-        await context.bot.send_message(chat_id=job.chat_id, text=message)
+        return await context.bot.send_message(chat_id=job.chat_id, text=message)
     except Exception as e:
         logging.info(f"""Failed sending job: {job.name} at {get_current_time_string()} with the following error: {str(e)}""")
     finally:
@@ -127,7 +127,7 @@ async def send_onetime_reminder_job(context: ContextTypes.DEFAULT_TYPE) -> None:
 async def awoo_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.is_bot:
         return
-    await context.bot.send_message(
+    return await context.bot.send_message(
         chat_id=update.effective_chat.id,
         text=choice(data["words"]["awoo"]),
         reply_to_message_id=update.message.id
@@ -137,7 +137,7 @@ async def awoo_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def get_message_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = generate_message(data)
     logging.info(f"Sending message: {message} at {get_current_time_string()}")
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=message)
+    return await context.bot.send_message(chat_id=update.effective_chat.id, text=message)
 
 
 async def list_reminders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -157,9 +157,8 @@ async def list_reminders_command(update: Update, context: ContextTypes.DEFAULT_T
             for reminder in sorted(chat.onetime_reminders):
                 reminders_list_msg += reminder.format_string() + "\n"
         if chat.reminders:
-            await context.bot.send_message(chat_id=chat_id, text=reminders_list_msg)
-            return
-    await context.bot.send_message(chat_id=chat_id, text=msg["err_no_reminders"])
+            return await context.bot.send_message(chat_id=chat_id, text=reminders_list_msg)
+    return await context.bot.send_message(chat_id=chat_id, text=msg["err_no_reminders"])
 
 
 async def set_random_offset(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -186,8 +185,7 @@ async def set_random_offset(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def set_daily_reminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     if not await is_user_chat_admin(update=update):
-        await context.bot.send_message(chat_id=chat_id, text=msg["err_admin_required"])
-        return
+        return await context.bot.send_message(chat_id=chat_id, text=msg["err_admin_required"])
     if context.args:
         parsed_time = parse_time(time_string=' '.join(context.args))
         if parsed_time:
@@ -204,20 +202,18 @@ async def set_daily_reminder_command(update: Update, context: ContextTypes.DEFAU
                 if job:
                     session.add(reminder)
                     session.commit()
-                    await context.bot.send_message(chat_id=chat_id, text=msg["cmd_set_daily_succcess"])
+                    return await context.bot.send_message(chat_id=chat_id, text=msg["cmd_set_daily_succcess"])
                 else:
-                    await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_schedule_jobs"])
+                    return await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_schedule_jobs"])
             else:
-                await context.bot.send_message(chat_id=chat_id, text=msg["err_already_exists"])
-            return
-    await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_parse_time"])
+                return await context.bot.send_message(chat_id=chat_id, text=msg["err_already_exists"])
+    return await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_parse_time"])
 
 
 async def stop_daily_reminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     if not await is_user_chat_admin(update=update):
-        await context.bot.send_message(chat_id=chat_id, text=msg["err_admin_required"])
-        return
+        return await context.bot.send_message(chat_id=chat_id, text=msg["err_admin_required"])
     if context.args:
         parsed_time = parse_time(time_string=' '.join(context.args))
         if parsed_time:
@@ -232,21 +228,19 @@ async def stop_daily_reminder_command(update: Update, context: ContextTypes.DEFA
                 job = job_exists_queue[0]
                 job.schedule_removal()
                 logging.info(f"Removing job: {reminder.name}")
-                await context.bot.send_message(chat_id=chat_id, text=msg["cmd_stop_daily_success"])
                 if job_exists_db:
                     session.delete(job_exists_db)
                     session.commit()
+                return await context.bot.send_message(chat_id=chat_id, text=msg["cmd_stop_daily_success"])
             else:
-                await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_find_reminder"])
-            return
-    await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_parse_time"])
+                return await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_find_reminder"])
+    return await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_parse_time"])
 
 
 async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     if len(context.args) < 4:
-        await context.bot.send_message(chat_id=chat_id, text=msg["err_reminder_need_at"])
-        return
+        return await context.bot.send_message(chat_id=chat_id, text=msg["err_reminder_need_at"])
 
     now = datetime.now(tz=PACIFIC_TZ).replace(microsecond=0)
     reminder = parse_reminder(
@@ -256,20 +250,15 @@ async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     if not reminder:
-        await context.bot.send_message(chat_id=chat_id, text=msg["err_reminder_need_at"])
-        return
+        return await context.bot.send_message(chat_id=chat_id, text=msg["err_reminder_need_at"])
     if not reminder.subject:
-        await context.bot.send_message(chat_id=chat_id, text=msg["err_reminder_no_subject"])
-        return
+        return await context.bot.send_message(chat_id=chat_id, text=msg["err_reminder_no_subject"])
     elif reminder.when < now:
-        await context.bot.send_message(chat_id=chat_id, text=msg["err_reminder_in_past"])
-        return
+        return await context.bot.send_message(chat_id=chat_id, text=msg["err_reminder_in_past"])
     elif reminder.when > now + timedelta(days=365):
-        await context.bot.send_message(chat_id=chat_id, text=msg["err_reminder_too_far_out"])
-        return
+        return await context.bot.send_message(chat_id=chat_id, text=msg["err_reminder_too_far_out"])
     elif reminder.when - now < timedelta(minutes=1):
-        await context.bot.send_message(chat_id=chat_id, text=msg["err_reminder_too_close"])
-        return
+        return await context.bot.send_message(chat_id=chat_id, text=msg["err_reminder_too_close"])
 
     add_chat_if_not_exist(update.effective_chat)
     job_exists = session.query(db.Reminder).filter(db.Reminder.name == reminder.name).first()
@@ -278,14 +267,17 @@ async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if job:
             session.add(reminder)
             session.commit()
-            await context.bot.send_message(
+            return await context.bot.send_message(
                 chat_id=chat_id,
-                text=f"I've set your reminder!\n{reminder.format_string()}\n{msg['cmd_reminder_list']}"
+                text="I've set your reminder!\n{}\n{}".format(
+                    reminder.format_string(),
+                    msg['cmd_reminder_list']
+                )
             )
         else:
-            await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_schedule_jobs"])
+            return await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_schedule_jobs"])
     else:
-        await context.bot.send_message(chat_id=chat_id, text=msg["err_already_exists"])
+        return await context.bot.send_message(chat_id=chat_id, text=msg["err_already_exists"])
 
 
 # [ ] remove_reminder_command
@@ -298,11 +290,9 @@ async def remove_reminder_command(update: Update, context: ContextTypes.DEFAULT_
     user_is_admin = await is_user_chat_admin(update=update)
     num_possible_matched_reminders = 0
     if not chat:
-        await context.bot.send_message(chat_id=chat_id, text=msg["err_chat_not_in_db"])
-        return
+        return await context.bot.send_message(chat_id=chat_id, text=msg["err_chat_not_in_db"])
     if not chat.reminders:
-        await context.bot.send_message(chat_id=chat_id, text=msg["err_no_reminders"])
-        return
+        return await context.bot.send_message(chat_id=chat_id, text=msg["err_no_reminders"])
     if context.args:
         for index, arg in enumerate(context.args):
             if arg.startswith("#"):
@@ -322,14 +312,13 @@ async def remove_reminder_command(update: Update, context: ContextTypes.DEFAULT_
                 except Exception:
                     pass
             if delete_reminder_num == -1:
-                await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_remove_reminder"])
-                return
+                return await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_remove_reminder"])
         t = parse_time(" ".join(time_args))
         if not t and delete_arg_index == -1:
-            await context.bot.send_message(
+            return await context.bot.send_message(
                 chat_id=chat_id,
-                text=msg["err_cant_parse_time"])
-            return
+                text=msg["err_cant_parse_time"]
+            )
 
     for reminder in chat.onetime_reminders:
         time_match = t and reminder.when.hour == t.hour and reminder.when.minute == t.minute
@@ -340,12 +329,12 @@ async def remove_reminder_command(update: Update, context: ContextTypes.DEFAULT_
                 reminders_to_show.append(reminder)
 
     if not reminders_to_show and num_possible_matched_reminders == 0 and not user_is_admin:
-        await context.bot.send_message(chat_id=chat_id, text=msg["err_remove_permissions"])
-        return
+        return await context.bot.send_message(chat_id=chat_id, text=msg["err_remove_permissions"])
 
     if reminders_to_show or (user_is_admin and chat.daily_reminders):
-        reminders_msg = f"""You have access to remove the following
-reminders{' that match your search' if context.args else ''}:\n"""
+        reminders_msg = "You have access to remove the following reminders{}:\n".format(
+            ' that match your search' if context.args else ''
+        )
         args = ' '.join(context.args)
         for i, reminder in enumerate(sorted(reminders_to_show)):
             n = i + 1
@@ -356,15 +345,12 @@ reminders{' that match your search' if context.args else ''}:\n"""
                 remove_scheduled_job(context=context, job_name=reminder.name)
                 session.delete(reminder)
                 session.commit()
-                await context.bot.send_message(chat_id=chat_id, text=f"Removing reminder {reminder_str}")
-                return
+                return await context.bot.send_message(chat_id=chat_id, text=f"Removing reminder {reminder_str}")
         if delete_reminder_num == -1:
-            await context.bot.send_message(chat_id=chat_id, text=reminders_msg, parse_mode="markdown")
-            return
+            return await context.bot.send_message(chat_id=chat_id, text=reminders_msg, parse_mode="markdown")
         else:
-            await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_remove_reminder"])
-            return
-    await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_find_reminder"])
+            return await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_remove_reminder"])
+    return await context.bot.send_message(chat_id=chat_id, text=msg["err_cant_find_reminder"])
 
 
 async def remind_me_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -373,60 +359,61 @@ async def remind_me_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def remind_examples_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=msg["cmd_remind_examples"], parse_mode="markdown")
+    return await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=msg["cmd_remind_examples"],
+        parse_mode="markdown"
+    )
 
 
 async def update_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await is_user_chat_admin(update=update):
-        await context.bot.send_message(chat_id=update.effective_chat.id, text=msg["err_admin_required"])
-        return
+        return await context.bot.send_message(chat_id=update.effective_chat.id, text=msg["err_admin_required"])
     global data
     data = get_data_from_google()
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=msg["cmd_update"])
+    return await context.bot.send_message(chat_id=update.effective_chat.id, text=msg["cmd_update"])
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=msg["cmd_help"])
+    return await context.bot.send_message(chat_id=update.effective_chat.id, text=msg["cmd_help"])
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_message.chat_id
     add_chat_if_not_exist(update.effective_message.chat)
-    await context.bot.send_message(chat_id=chat_id, text=msg["cmd_start"])
+    return await context.bot.send_message(chat_id=chat_id, text=msg["cmd_start"])
 
 
 async def stop_all_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_message.chat_id
     if not await is_user_chat_admin(update=update):
-        await context.bot.send_message(chat_id=chat_id, text=msg["err_admin_required"])
-        return
+        return await context.bot.send_message(chat_id=chat_id, text=msg["err_admin_required"])
     chat: db.Chat = session.query(db.Chat).filter(db.Chat.id == chat_id).first()
     if chat:
         set_stop_armed(chat_id=chat_id, armed=True)
-        await context.bot.send_message(chat_id=chat_id, text=msg["cmd_stop"])
+        return await context.bot.send_message(chat_id=chat_id, text=msg["cmd_stop"])
     else:
-        await context.bot.send_message(chat_id=chat_id, text=msg["err_chat_not_in_db"])
+        return await context.bot.send_message(chat_id=chat_id, text=msg["err_chat_not_in_db"])
 
 
 async def stop_confirm_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_message.chat_id
     if not await is_user_chat_admin(update=update):
-        await context.bot.send_message(chat_id=chat_id, text=msg["err_admin_required"])
-        return
+        return await context.bot.send_message(chat_id=chat_id, text=msg["err_admin_required"])
     chat: db.Chat = session.query(db.Chat).filter(db.Chat.id == chat_id).first()
     if chat:
         if chat.stop_armed:
             session.delete(chat)
             session.commit()
-            await context.bot.send_message(chat_id=chat_id, text=msg["cmd_stop_confirm"])
+            return await context.bot.send_message(chat_id=chat_id, text=msg["cmd_stop_confirm"])
         else:
-            await context.bot.send_message(chat_id=chat_id, text=msg["err_stop_not_armed"])
+            return await context.bot.send_message(chat_id=chat_id, text=msg["err_stop_not_armed"])
     else:
-        await context.bot.send_message(chat_id=chat_id, text=msg["err_chat_not_in_db"])
+        return await context.bot.send_message(chat_id=chat_id, text=msg["err_chat_not_in_db"])
 
 
 async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=msg["cmd_unknown"])
+    return await context.bot.send_message(chat_id=update.effective_chat.id, text=msg["cmd_unknown"])
 
 
 async def parse_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):

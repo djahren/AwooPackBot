@@ -68,7 +68,7 @@ def get_current_time_string() -> str:
     return datetime.now(PACIFIC_TZ).strftime("%H:%M:%S")
 
 
-def get_system_messages() -> dict:
+def get_system_messages() -> dict[str]:
     with open(MESSAGES_FILE_PATH, "r") as msg_file:
         return json.load(msg_file)
 
