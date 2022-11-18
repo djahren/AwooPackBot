@@ -95,6 +95,7 @@ class Chat(Base):
     title: str = Column(String(255))
     time_zone: str = Column(String(100))
     stop_armed: bool = Column(Boolean, default=False)
+    reminder_offset: int = Column(Integer, default=0)
     reminders: list[Reminder] = relationship(
         "Reminder", back_populates="chat", cascade="all, delete-orphan"
     )

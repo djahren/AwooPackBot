@@ -54,7 +54,7 @@ def remove_scheduled_job(context: ContextTypes.DEFAULT_TYPE, job_name: str):
         logging.info(f"Removing job: {job_name}")
 
 
-def add_chat_if_not_exist(chat: Chat):
+def add_chat_if_not_exist(chat: Chat) -> db.Chat:
     the_chat: db.Chat = session.query(db.Chat).filter(db.Chat.id == chat.id).first()
     if not the_chat:
         title = chat.title if chat.title else f"{chat.first_name} {chat.last_name}"
@@ -65,6 +65,7 @@ def add_chat_if_not_exist(chat: Chat):
         )
         session.add(the_chat)
         session.commit()
+    return the_chat
 
 
 def set_stop_armed(chat_id, armed):
@@ -159,6 +160,27 @@ async def list_reminders_command(update: Update, context: ContextTypes.DEFAULT_T
             await context.bot.send_message(chat_id=chat_id, text=reminders_list_msg)
             return
     await context.bot.send_message(chat_id=chat_id, text=msg["err_no_reminders"])
+
+
+async def set_random_offset(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    if not await is_user_chat_admin(update=update):
+        return await context.bot.send_message(chat_id=chat_id, text=msg["err_admin_required"])
+    if context.args:
+        try:
+            offset = int(context.args[0])
+            if 0 <= offset <= 60:
+                chat = add_chat_if_not_exist(update.effective_chat)
+                chat.reminder_offset = offset
+                session.commit()
+                if offset > 0:
+                    msg_text = str(msg["cmd_set_random_set"]).format(offset)
+                else:
+                    msg_text = msg["cmd_set_random_removed"]
+                return await context.bot.send_message(chat_id=chat_id, text=msg_text)
+        except Exception:
+            pass
+    return await context.bot.send_message(chat_id=chat_id, text=msg["err_set_random"])
 
 
 async def set_daily_reminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -424,6 +446,7 @@ if __name__ == '__main__':
     application.add_handler(CommandHandler('getmessage', get_message_command))
     application.add_handler(CommandHandler(['list', 'listdaily', 'listreminders'], list_reminders_command))
     application.add_handler(CommandHandler(['set', 'setdaily', 'setdailyreminder'], set_daily_reminder_command))
+    application.add_handler(CommandHandler(['setrandom', 'setoffset'], set_random_offset))
     application.add_handler(CommandHandler(['stopdaily', 'stopdailyreminder'], stop_daily_reminder_command))
     application.add_handler(CommandHandler('remind', remind_command))
     application.add_handler(CommandHandler('remindme', remind_me_command))
