@@ -1,7 +1,7 @@
 import logging
 import re
 from datetime import time, timedelta, datetime
-from random import choice
+from random import choice, randrange
 
 from telegram import Chat, Update
 from telegram.ext import (
@@ -27,13 +27,18 @@ msg = get_system_messages()
 session = db.Session()
 
 
-def register_reminder(context: ContextTypes.DEFAULT_TYPE, chat_id: int, reminder: db.Reminder):
+def register_reminder(context: ContextTypes.DEFAULT_TYPE, reminder: db.Reminder):
     if reminder.is_daily:
+        chat = get_chat_from_db(chat_id=reminder.chat_id)
+        offset = reminder.when
+        if chat:
+            if chat.reminder_offset:
+                offset -= timedelta(minutes=chat.reminder_offset)
         return context.job_queue.run_repeating(
             send_daily_reminder_job,
             interval=timedelta(days=1),
-            first=time(hour=reminder.when.hour, minute=reminder.when.minute, tzinfo=PACIFIC_TZ),
-            chat_id=chat_id,
+            first=time(hour=offset.hour, minute=offset.minute, tzinfo=PACIFIC_TZ),
+            chat_id=reminder.chat_id,
             name=reminder.name,
             data=reminder
         )
@@ -41,7 +46,7 @@ def register_reminder(context: ContextTypes.DEFAULT_TYPE, chat_id: int, reminder
         return context.job_queue.run_once(
             callback=send_onetime_reminder_job,
             when=reminder.when.astimezone(tz=PACIFIC_TZ),
-            chat_id=chat_id,
+            chat_id=reminder.chat_id,
             name=reminder.name,
             data=reminder
         )
@@ -54,8 +59,20 @@ def remove_scheduled_job(context: ContextTypes.DEFAULT_TYPE, job_name: str):
         logging.info(f"Removing job: {job_name}")
 
 
+def reregister_scheduled_daily_jobs(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
+    chat = get_chat_from_db(chat_id=chat_id)
+    if chat:
+        for reminder in chat.daily_reminders:
+            remove_scheduled_job(context=context, job_name=reminder.name)
+            register_reminder(context=context, reminder=reminder)
+
+
+def get_chat_from_db(chat_id: int) -> db.Chat:
+    return session.query(db.Chat).filter(db.Chat.id == chat_id).first()
+
+
 def add_chat_if_not_exist(chat: Chat) -> db.Chat:
-    the_chat: db.Chat = session.query(db.Chat).filter(db.Chat.id == chat.id).first()
+    the_chat = get_chat_from_db(chat_id=chat.id)
     if not the_chat:
         title = chat.title if chat.title else f"{chat.first_name} {chat.last_name}"
         the_chat = db.Chat(
@@ -69,13 +86,11 @@ def add_chat_if_not_exist(chat: Chat) -> db.Chat:
 
 
 def set_stop_armed(chat_id, armed):
-    chat: db.Chat = session.query(db.Chat).filter(db.Chat.id == chat_id).first()
+    chat = get_chat_from_db(chat_id=chat_id)
     if chat:
         chat.stop_armed = armed
         session.commit()
-        return True
-    else:
-        return False
+    return chat
 
 
 def load_chats(application):
@@ -86,30 +101,44 @@ def load_chats(application):
         context = ContextTypes.DEFAULT_TYPE(application=application, chat_id=chat.id)
         purge_past_reminders(chat.id)
         for reminder in chat.reminders:
-            register_reminder(context=context, chat_id=chat.id, reminder=reminder)
+            register_reminder(context=context, reminder=reminder)
 
 
 def purge_past_reminders(chat_id: int):
-    chat: db.Chat = session.query(db.Chat).filter(db.Chat.id == chat_id).first()
-    if not chat:
-        return
-    now = datetime.now(tz=PACIFIC_TZ)
-    for reminder in chat.onetime_reminders:
-        if reminder.when.astimezone(tz=PACIFIC_TZ) < now:
-            session.delete(reminder)
-    session.commit()
+    chat = get_chat_from_db(chat_id=chat_id)
+    if chat:
+        now = datetime.now(tz=PACIFIC_TZ)
+        for reminder in chat.onetime_reminders:
+            if reminder.when.astimezone(tz=PACIFIC_TZ) < now:
+                session.delete(reminder)
+        session.commit()
 
 
 async def send_daily_reminder_job(context: ContextTypes.DEFAULT_TYPE) -> None:
-    # called by scheduled job
     job = context.job
+    logging.info(job.name)
+    chat = get_chat_from_db(job.chat_id)
+    if chat and not job.name.endswith("_delayed"):
+        if chat.reminder_offset:
+            offset = timedelta(
+                minutes=randrange(0, chat.reminder_offset * 2),
+                seconds=randrange(0, 60)
+            )
+            delayed = datetime.now(tz=PACIFIC_TZ) + offset
+            logging.info(f"Delaying job until: {delayed}")
+            return context.job_queue.run_once(
+                callback=send_daily_reminder_job,
+                when=delayed,
+                chat_id=job.chat_id,
+                name=job.name + "_delayed",
+                data=job.data
+            )
     message = generate_message(data)
     logging.info(f"Sending message via job: {message} at {get_current_time_string()}")
     return await context.bot.send_message(chat_id=job.chat_id, text=message)
 
 
 async def send_onetime_reminder_job(context: ContextTypes.DEFAULT_TYPE) -> None:
-    # called by scheduled job
     job = context.job
     try:
         reminder: db.Reminder = job.data
@@ -147,7 +176,10 @@ async def list_reminders_command(update: Update, context: ContextTypes.DEFAULT_T
     if chat:
         reminders_list_msg = ""
         if chat.daily_reminders:
-            reminders_list_msg += "This chat has the following daily reminder messages set:\n"
+            minutes_str = "minute" if chat.reminder_offset == 1 else "minutes"
+            reminders_list_msg += "This chat has the following daily reminder messages set{}:\n".format(
+                f" (with an offset of +/- {chat.reminder_offset} {minutes_str})" if chat.reminder_offset else ""
+            )
             for reminder in sorted(chat.daily_reminders):
                 reminders_list_msg += reminder.format_string() + "\n"
         if chat.onetime_reminders:
@@ -170,8 +202,11 @@ async def set_random_offset(update: Update, context: ContextTypes.DEFAULT_TYPE):
             offset = int(context.args[0])
             if 0 <= offset <= 60:
                 chat = add_chat_if_not_exist(update.effective_chat)
+                if offset == chat.reminder_offset:
+                    return await context.bot.send_message(chat_id=chat_id, text=msg["err_set_random_same"])
                 chat.reminder_offset = offset
                 session.commit()
+                reregister_scheduled_daily_jobs(context=context, chat_id=chat_id)
                 if offset > 0:
                     msg_text = str(msg["cmd_set_random_set"]).format(offset)
                 else:
@@ -198,7 +233,7 @@ async def set_daily_reminder_command(update: Update, context: ContextTypes.DEFAU
             job_exists_db = session.query(db.Reminder).filter(db.Reminder.name == reminder.name).first()
             job_exists_queue = context.job_queue.get_jobs_by_name(reminder.name)
             if not job_exists_db and not job_exists_queue:
-                job = register_reminder(context=context, chat_id=chat_id, reminder=reminder)
+                job = register_reminder(context=context, reminder=reminder)
                 if job:
                     session.add(reminder)
                     session.commit()
@@ -263,7 +298,7 @@ async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     add_chat_if_not_exist(update.effective_chat)
     job_exists = session.query(db.Reminder).filter(db.Reminder.name == reminder.name).first()
     if not job_exists:
-        job = register_reminder(context=context, chat_id=chat_id, reminder=reminder)
+        job = register_reminder(context=context, reminder=reminder)
         if job:
             session.add(reminder)
             session.commit()
@@ -321,7 +356,7 @@ async def remove_reminder_command(update: Update, context: ContextTypes.DEFAULT_
             )
 
     for reminder in chat.onetime_reminders:
-        time_match = t and reminder.when.hour == t.hour and reminder.when.minute == t.minute
+        time_match = False if 't' not in locals() else reminder.when.hour == t.hour and reminder.when.minute == t.minute
         delete_but_not_time_is_set = delete_arg_index != -1 and not t
         if not context.args or delete_but_not_time_is_set or time_match:
             num_possible_matched_reminders += 1
@@ -434,7 +469,7 @@ if __name__ == '__main__':
     application.add_handler(CommandHandler(['list', 'listdaily', 'listreminders'], list_reminders_command))
     application.add_handler(CommandHandler(['set', 'setdaily', 'setdailyreminder'], set_daily_reminder_command))
     application.add_handler(CommandHandler(['setrandom', 'setoffset'], set_random_offset))
-    application.add_handler(CommandHandler(['stopdaily', 'stopdailyreminder'], stop_daily_reminder_command))
+    application.add_handler(CommandHandler(['stopdaily', 'stopreminder', 'stopdailyreminder'], stop_daily_reminder_command))
     application.add_handler(CommandHandler('remind', remind_command))
     application.add_handler(CommandHandler('remindme', remind_me_command))
     application.add_handler(CommandHandler(['remindexamples', 'reminderexamples'], remind_examples_command))

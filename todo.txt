@@ -1,5 +1,4 @@
 #TODO: chats.json importer
-#TODO: Add optional random offset to send-reminder
 #TODO: Tests for chat functions
 #TODO: refactor commands to subfolder/individual files
 #TODO: Fix chats object in Reminder class

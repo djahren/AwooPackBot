@@ -11,7 +11,7 @@ from sqlalchemy import (
     and_)
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
-engine = create_engine('sqlite:///data/chats.db', echo=True)
+engine = create_engine('sqlite:///data/chats.db')  # , echo=True
 Base = declarative_base()
 Session = sessionmaker(bind=engine)
 

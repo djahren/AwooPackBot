@@ -27,6 +27,7 @@
     "err_reminder_too_far_out": "✌ Too far out, fam! ☮ This date is groovy but I can only see a year into the future. Try setting a reminder within the next 365 days.",
     "err_reminder_too_close": "That time's a bit #TooSoon, I can only schedule things that are minute or more away.",
     "err_set_random": "Please enter an random offset (in minutes) that is between 0 and 60.",
+    "err_set_random_same": "The offset specified is the same as is currently set for the chat. Nothing has been changed.",
     "err_stop_not_armed": "I can't perform this action until you run /stopall first.",
     "err_too_much_time": "Looks like someone's got too much time on their hands. Please use 24h time format where hours are 23 or less and minutes are 59 or less."
 }
