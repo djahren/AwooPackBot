@@ -237,6 +237,14 @@ class TestParseReminder:
         )
         assert parse_reminder(chat_id=self.chat_id, from_user=self.from_user, args=reminder_text) == reminder_object
 
+    def test_an_hour(self):  # TODO: def test_an_hour
+        reminder_text = "me in an hour to take my meds.".split(" ")
+        return reminder_text
+
+    def test_one_hour(self):  # TODO: def test_one_hour
+        reminder_text = "me in one hour to take my meds, you're doing great.".split(" ")
+        return reminder_text
+
     def test_yodel_at_turtles_loudly(self):
         reminder_text = "me to yodel at turtles at 4:20 loudly on 12/31".split(" ")
         reminder_object = db.Reminder(
